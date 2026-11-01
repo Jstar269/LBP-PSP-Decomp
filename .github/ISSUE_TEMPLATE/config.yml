@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How matching works
+    url: https://github.com/Jstar269/lbp-psp-decomp/blob/main/CONTRIBUTING.md
+    about: Setup, method, checks and what a pull request contains. Every task needs your own copy of the game.
+  - name: Rights-holder or legal concern
+    url: https://github.com/Jstar269/lbp-psp-decomp/security/advisories/new
+    about: Contact the maintainer privately about any file in this repository.

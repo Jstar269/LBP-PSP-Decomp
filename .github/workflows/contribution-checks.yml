@@ -1,0 +1,40 @@
+name: Contribution checks
+
+# Runs on every pull request, from a fork too: the checks that need no game, compiler or configuration. The checker
+# that decides is the base branch's own copy of tools/lbpprcheck.py, so a pull request cannot loosen it for itself.
+# Passing here is not acceptance: the maintainer reviews every change and re-verifies every source with
+# tools/lbpmatch.py (EXACT, against the retail bytes) before it is accepted.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the base branch's tools
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git worktree add --detach "$RUNNER_TEMP/base" "origin/${BASE_REF}"
+      - name: What the pull request adds (no game data, no private material, append-only symbols, headers, gate)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          checker="$RUNNER_TEMP/base/tools/lbpprcheck.py"
+          [ -f "$checker" ] || checker=tools/lbpprcheck.py   # the pull request that adds the checker
+          python3 "$checker" --repo . --base "origin/${BASE_REF}"
+      - name: Fake-match gate over every source
+        run: python3 tools/lbpgate.py --all --wip
+      - name: Licence map (REUSE.toml) covers every file
+        run: python3 tools/lbpreuse.py check
+      - name: Unit tests that need no game
+        run: python3 -m unittest discover -s tools -p "test_*.py"

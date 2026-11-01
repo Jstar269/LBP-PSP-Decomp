@@ -181,6 +181,41 @@ def to_wsl(path: Path) -> str:
     return f"/mnt/{p[0].lower()}{p[2:]}"
 
 
+# The i386 psp-gcc kits cannot stat files on /mnt/c (64-bit inode numbers: EOVERFLOW), so each GCC source compiles as
+# a copy in a native temporary directory, with ./include (`#include "lbp/<name>.h"`) a link to ONE native copy of
+# include/ per batch ($LBPINC). Copying include/ for every job overloaded the /mnt/c file share under --parallel
+# (`cp: ... Cannot allocate memory`), and the job then died before writing compile.log (2026-11-01). A job always
+# writes its compile.log (naming a failed staging step), writes obj.o through a temporary name, and exits 0.
+STAGE_FAILED = 97   # exit status of a batch script that could not copy include/ into WSL
+
+
+def gcc_stage_lines(include: Path) -> list[str]:
+    """Script lines that copy include/ once into a native directory exported as $LBPINC (exit STAGE_FAILED if not)."""
+    return ["LBPINC=$(mktemp -d /tmp/lbpinc.XXXXXX) || exit %d" % STAGE_FAILED, "export LBPINC",
+            f"cp -r {shlex.quote(to_wsl(include))} \"$LBPINC/include\" || "
+            f"{{ echo 'cannot copy include/ into WSL' >&2; rm -rf \"${{LBPINC:?}}\"; exit {STAGE_FAILED}; }}"]
+
+
+def gcc_batch(xargs_line: str, include: Path) -> list[str]:
+    """The whole batch script: stage include/, run the jobs, remove the staged copy, keep xargs' exit status."""
+    return gcc_stage_lines(include) + [xargs_line, "s=$?", 'rm -rf "${LBPINC:?}"', "exit $s"]
+
+
+def gcc_job(src: Path, log: Path, obj: Path, compile_cmd: str, tag: str) -> str:
+    """One xargs job: run `compile_cmd` (which reads ./<name>, `-I include`, writes ./obj.o) on a copy of `src` in a
+    native temporary directory; copy the log to `log` and the object to `obj`. Always exits 0 (xargs stops at 255)."""
+    q = shlex.quote
+    lg, ob = q(to_wsl(log)), q(to_wsl(obj))
+    part = q(to_wsl(obj) + ".part")
+    return (f"t=$(mktemp -d /tmp/{tag}.XXXXXX) || {{ echo 'compile job: mktemp failed' > {lg}; exit 0; }}; "
+            f"if cp {q(to_wsl(src))} \"$t/\" && ln -s \"$LBPINC/include\" \"$t/include\"; then "
+            f"(cd \"$t\" && {compile_cmd}) > \"$t/log\" 2>&1; "
+            f"cp \"$t/log\" {lg} || echo 'compile job: copying the compiler log back failed' > {lg}; "
+            f"if [ -f \"$t/obj.o\" ]; then cp \"$t/obj.o\" {part} && mv {part} {ob}; fi; "
+            f"else echo 'compile job: staging the source in WSL failed (see the run output)' > {lg}; fi; "
+            f"rm -rf \"$t\"; exit 0")
+
+
 def build_key(path: Path) -> str:
     """The directory name of one source's build products under build/<module>/: `<folder>__<stem>__<digest>`, the
     digest being the first 10 hex digits of the SHA-1 of the source's path (relative to the checkout when inside it,
@@ -501,14 +536,14 @@ def compare_placed(h: dict, out: Path, data: bytes, seg: dict, placement: list, 
     return "EXACT", "", 0
 
 
-def run_wsl(lines: list[str], name: str, native: str | None = None) -> None:
+def run_wsl(lines: list[str], name: str, native: str | None = None) -> int:
     # Per-process script names, so independent runs (on different sources) can overlap. `native` is exported
-    # as $N for the MWCC command lines.
+    # as $N for the MWCC command lines. Returns the script's exit status.
     script = ROOT / "build" / f"{name}.{os.getpid()}.sh"
     prologue = ["#!/bin/sh"] + (["export N=" + native] if native else [])
     script.write_text("\n".join(prologue + lines) + "\n", encoding="utf-8", newline="\n")
     try:
-        subprocess.run(["wsl.exe", "-e", "sh", to_wsl(script)], check=False)
+        return subprocess.run(["wsl.exe", "-e", "sh", to_wsl(script)], check=False).returncode
     finally:
         script.unlink(missing_ok=True)
 
@@ -554,13 +589,10 @@ def main() -> int:
             gflags = args.flags if args.flags is not None else g["flags"]
             lang = "-x c++" if h["lang"] == "c++" else "-x c"
             bprefix = f"-B {g['B']} " if g["B"] else ""
-            # the i386 compiler cannot stat files on /mnt/c (64-bit inode numbers: EOVERFLOW), so it
-            # compiles a copy in a native temporary directory, with a copy of include/ as its -I directory (the
-            # project's shared headers, `#include "lbp/<name>.h"`; 2026-10-28)
-            cmds.append(f"t=$(mktemp -d /tmp/lbpgcc.XXXXXX) && cp {shlex.quote(to_wsl(p))} $t/ && "
-                        f"cp -r {shlex.quote(to_wsl(ROOT / 'include'))} $t/include && cd $t && "
-                        f"{g['driver']} {bprefix}-c {gflags} {lang} -I include {extra} -o obj.o {shlex.quote(p.name)} "
-                        f"> log 2>&1; cp log {log}; [ -f obj.o ] && cp obj.o {obj}; cd / && rm -rf $t")
+            # a copy in a native temporary directory, ./include linked to the batch's native include/ (gcc_job)
+            cmds.append(gcc_job(p, out / "compile.log", out / "obj.o",
+                                f"{g['driver']} {bprefix}-c {gflags} {lang} -I include {extra} -o obj.o "
+                                f"{shlex.quote(p.name)}", "lbpgcc"))
             continue
         if cc in SNC_PROFILE_NAMES:
             # SN Systems SNC (pspsnc.exe, a Windows program): compiled natively here, before the WSL batch
@@ -579,7 +611,9 @@ def main() -> int:
     jobfile = ROOT / "build" / f"compile.{os.getpid()}.jobs"
     jobfile.write_text("\n".join(cmds) + "\n", encoding="utf-8", newline="\n")
     try:
-        run_wsl([f"tr '\\n' '\\0' < {shlex.quote(to_wsl(jobfile))} | xargs -0 -P {args.parallel} -n 1 sh -c"], "compile", native)
+        xargs = f"tr '\\n' '\\0' < {shlex.quote(to_wsl(jobfile))} | xargs -0 -P {args.parallel} -n 1 sh -c"
+        if run_wsl(gcc_batch(xargs, ROOT / "include"), "compile", native) == STAGE_FAILED:
+            raise SystemExit("could not copy include/ into WSL for the GCC compiles (message above); nothing compiled")
     finally:
         jobfile.unlink(missing_ok=True)
     # 2. link each object at its retail address with only the symbols it needs
@@ -593,7 +627,9 @@ def main() -> int:
     for p, h, out in jobs:
         obj_path = out / "obj.o"
         if not obj_path.exists():
-            results[p] = ("COMPILE_FAILED", (out / "compile.log").read_text(errors="replace")[-600:])
+            log_path = out / "compile.log"
+            results[p] = ("COMPILE_FAILED", log_path.read_text(errors="replace")[-600:] if log_path.exists() else
+                          "the compile job wrote no compile.log (it did not run; see the run output)")
             continue
         obj = obj_path.read_bytes()
         syms = symcache.setdefault(h["module"], load_symbols(h["module"]))

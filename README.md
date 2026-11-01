@@ -38,11 +38,13 @@ The public scope is the game's own code and the open-source libraries it links. 
   pspdev sources by `toolchain/gcc4/` (evidence in [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md)).
 - The decomp.me PSP compiler kits (their binutils 2.14 assembler, and the few objects built with other compilers),
   and PSPDEV binutils (`psp-ld`, `psp-objcopy`, `psp-objdump`).
-- Your own LittleBigPlanet disc image, and a way to decrypt its executable on your machine.
+- Your own LittleBigPlanet disc image, and a way to decrypt its executable on your machine (a tool of your choice;
+  this repository has no decryption code).
 
 ## Setup
 
-1. Decrypt `PSP_GAME/SYSDIR/EBOOT.BIN` from your own disc locally into `inputs/` (gitignored).
+1. Decrypt `PSP_GAME/SYSDIR/EBOOT.BIN` from your own disc locally into `inputs/` (gitignored), with a tool of your
+   choice. Its SHA-256 must equal the one in `data/modules.json`.
 2. `copy lbp-config.example.json lbp-config.json`, fill in your paths, then run `python tools/lbpconfig.py check`.
 3. Describe and check your module (its SHA-256 must equal `data/modules.json`), make the function list from it, and
    create the campaign directory:
@@ -53,7 +55,7 @@ The public scope is the game's own code and the open-source libraries it links. 
    python tools/lbpbootstrap.py --out campaign --module EBOOT.BIN=inputs/<...>/EBOOT.elf
    ```
 
-4. Verify every source: `python tools/lbpmatch.py --all --parallel 4`.
+4. `mkdir try` (scratch, gitignored), then verify every source: `python tools/lbpmatch.py --all --parallel 4`.
 
 ## Licensing
 
@@ -65,5 +67,16 @@ contributions, not the original game.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) (method, file format, the fake-match gate) and
-[`docs/GUIDE.md`](docs/GUIDE.md). Never post bytes, disassembly or decompiler output of the game anywhere.
+Contributions are welcome: matched functions, near misses with notes, compiler findings, tool fixes and
+documentation. [`CONTRIBUTING.md`](CONTRIBUTING.md) says what you need (your own copy of the game, the compilers you
+install yourself), the method, what a pull request contains and what is never allowed; [`docs/GUIDE.md`](docs/GUIDE.md)
+has the tools. Issues labelled
+[good first issue](https://github.com/Jstar269/lbp-psp-decomp/labels/good%20first%20issue) are small functions to
+start with.
+
+If the game misbehaves in the recompiled player, the fix usually belongs in
+[Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp) (system calls, instructions, graphics, the build); work
+belongs here when it rebuilds a function's source so that it compiles to the original bytes.
+
+Never post bytes, disassembly or decompiler output of the game anywhere: not in issues or pull requests, not on web
+tools such as decomp.me.

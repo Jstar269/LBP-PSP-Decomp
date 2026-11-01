@@ -1,11 +1,59 @@
 # Contributing
 
-This guide describes how functions are matched, installed and documented in this repository. It is hst-decomp's
-CONTRIBUTING.md with the tool names changed; LBP-specific facts are in [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)
-(compiler profiles) and `data/modules.json` (modules).
+Contributions are welcome: matched functions, near misses with notes, compiler findings, tool fixes and documentation.
+This guide covers what you need, how a function is matched and checked, and what a pull request must contain. The
+method is hst-decomp's with the tool names changed; LBP-specific facts are in [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)
+(compiler profiles) and `data/modules.json` (modules). Contributions are licensed GPL-3.0-or-later like the project's
+own code (README, "Licensing"). By opening a pull request you confirm that you wrote the change (or name where it came
+from) and that you may submit it under that licence.
 
-Read [AGENTS.md](AGENTS.md) first: its rules (game data never enters the repository; only EXACT counts) apply to
-every change.
+Read [AGENTS.md](AGENTS.md) too: its rules (game data never enters the repository; only EXACT counts) apply to every
+change, by a person or an agent.
+
+## What you need
+
+- **Your own copy of the game** (LittleBigPlanet, UCUS98744, disc version 2.00) and its `PSP_GAME/SYSDIR/EBOOT.BIN`
+  decrypted on your own machine with a tool of your choice. This repository contains no game data and no decryption
+  code. `tools/lbpbootstrap.py` checks the decrypted file against the SHA-256 in `data/modules.json`.
+- **Windows with WSL** (Ubuntu 24.04, with `libc6-i386`) and **Python 3.12 or newer** with no third-party packages.
+- **The compilers, which you build or install yourself** (none is in this repository):
+  - the open-source GCC 4.x PSP compilers (`psp-gcc-4.0.4x`, the primary, and `4.0.2x`, `4.0.2h`, `4.1.0s`), built
+    from the GNU and pspdev sources by [`toolchain/gcc4/`](toolchain/gcc4/README.md), which says exactly what to
+    install, downloads and verifies the sources, and checks the result against the recorded builds;
+  - the decomp.me `psp-gcc-1.3.1` kit (its Sony binutils 2.14 assembler is what the GCC 4 builds assemble with) and
+    the `psp-gcc-1.7.1` kit (the `cc=gcc171-*` sources), from
+    [decomp.me's compiler release](https://github.com/decompme/compilers/releases/tag/compilers);
+  - PSPDEV binutils (`psp-ld`, `psp-objcopy`, `psp-objdump`), the release `toolchain/gcc4/README.md` names.
+
+  `lbp-config.example.json` documents every key; matching needs `campaign_root`, `gcc4_home`, `gcc_home` and
+  `pspdev_bin`. The other keys belong to maintainer tools.
+
+## Setting up
+
+Follow [Setup](docs/GUIDE.md#setup) in the project guide (or the README's short form), then check that one function
+builds and that your setup reproduces the published matches:
+
+```
+python tools/lbpconfig.py check
+python tools/lbpmatch.py src/eboot/<file>.c
+python tools/lbpmatch.py --all --parallel 4
+```
+
+## Never allowed
+
+These hold for every file, commit, pull request, issue and comment, here and anywhere else:
+
+- **No game data.** No retail or decrypted modules, no disassembly dumps or listings of the game, no hex dumps, no
+  data files, images or audio taken from the disc, no keys. Your inputs stay under the gitignored `inputs/` and
+  `campaign/`.
+- **No fake matches.** No `asm` that emits general-register instructions (the inline VFPU rule below is the one
+  exception), no `.word`/`.byte` directives, no included binaries, no `extra=` flags or byte masking in `src/`.
+- **Nothing derived from the disc on web tools.** Do not post retail bytes, disassembly or decompiler output of the
+  game to decomp.me scratches, pastebins, chat services, AI web services or public issues. In issues and pull
+  requests, addresses, file names and tool status lines are fine.
+- **No Sony SDK reconstructions**, no compiler or SDK header text, and no code from another project without its notice
+  and an entry in `THIRD_PARTY.md`.
+- **No private material**: no paths that name your user account, no tokens or keys, no personal data.
 
 ## Ground rules
 
@@ -26,15 +74,6 @@ every change.
   so equally named files in different directories never share build products).
 - Do not search recursively (`grep -r`) outside `src/`, `wip/`, `docs/`, `symbols/`, `include/` and your own `try/`
   directory. The campaign directory and `build/` can hold gigabytes.
-
-## Setting up
-
-Follow [Setup](docs/GUIDE.md#setup) in the project guide, then check that one function builds:
-
-```
-python tools/lbpconfig.py check
-python tools/lbpmatch.py src/eboot/<file>.c
-```
 
 ## Method
 
@@ -156,12 +195,39 @@ the evidence. Where LBP shares a compiler with Hot Shots Tennis, hst-decomp's ve
 
 ```
 python tools/lbpmatch.py <every file you added or changed>     # EXACT n/n
-python tools/lbplint.py                                         # no header findings
+python tools/lbplint.py --show header                          # none of your files listed
+python tools/lbpprcheck.py --base origin/main                  # what CI checks on your pull request
 ```
 
-When a change adds files, `python tools/lbpreuse.py check` confirms that every tracked file is covered by the licence
-map (`REUSE.toml`); new library sources need `python tools/lbpreuse.py newlib --write` first. `ORIGINS.json` is a
-snapshot made by `python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
+`lbpprcheck.py` needs no game or compiler: it refuses binary files, game data, never-versioned paths (`build/`,
+`try/`, `inputs/`, `campaign/`, `lbp-config.json`), personal paths and tokens, disassembly-like listings, changed lines
+in `symbols/`, sources without a valid header or note, and anything the fake-match gate refuses. When a change adds
+files, `python tools/lbpreuse.py check` confirms that every tracked file is covered by the licence map (`REUSE.toml`);
+new library sources need `python tools/lbpreuse.py newlib --write` first. `ORIGINS.json` is a snapshot made by
+`python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
 
 For a change that touches many sources, `python tools/lbpmatch.py --all` is the full regression (it shares `build/`
 with any concurrent run, so run one at a time).
+
+## Pull requests
+
+Fork the repository, make a branch, and open a pull request against `main`. Keep one topic per pull request: one
+function, a family of clones of one function, one compiler finding, or one tool fix.
+
+A pull request contains:
+
+- the sources, each with its header and a true line-2 note (`Hand-written reconstruction ...` when you wrote it;
+  name the generator tag when you started from a generated candidate), and any appended `symbols/` lines;
+- in the description: the `python tools/lbpmatch.py <files>` output showing `EXACT` for each source, what you
+  changed from any starting candidate, and, if you used an AI tool, which one;
+- for a near miss in `wip/`: the differing words and what you ruled out, as trailing `//` comments.
+
+What happens next: CI runs the checks above on the pull request (a first-time contributor's run waits for the
+maintainer's approval). The maintainer reviews the change and **re-verifies every source with the maintainers' tools
+before accepting it**: the source is compiled and compared against the retail bytes again and passes the promotion
+gate, whatever the pull request's own output said. This repository is published from the maintainer's own tree, so
+an accepted pull request is not merged with the button: the change is applied there, credited to you in the commit
+and in the next publish commit's message, and the pull request is closed with a link to that commit.
+
+Not accepted: anything under "Never allowed" above, Sony SDK reconstructions, sources that are not `EXACT`, edits to
+existing `symbols/` lines, and tool changes mixed into a matching change.

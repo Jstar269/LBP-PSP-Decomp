@@ -1,0 +1,24 @@
+name: A function to match
+description: Claim or discuss one function (or one clone family) before or while you match it.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste game data: no retail bytes, disassembly, hex dumps or decompiler output of the game, here or on web
+        tools such as decomp.me. Addresses, file names and tool status lines (`lbpmatch.py`, `lbpdiff.py` counts) are
+        fine.
+  - type: input
+    id: function
+    attributes:
+      label: Module and address
+      placeholder: EBOOT.BIN 0x0886b2fc, or wip/<file>.c
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: Where it stands
+      description: For example "EXACT, pull request coming", or "3 words differ; ruled out declaration order and types".
+    validations:
+      required: true

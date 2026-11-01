@@ -1,0 +1,26 @@
+name: Report a problem
+description: A source that no longer matches, a tool error, or a documentation mistake.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never attach or paste game data, decrypted modules, keys or compiler binaries. Addresses, file names and tool
+        output are fine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: File or address
+      placeholder: src/eboot/FUN_0886b2fc.c or EBOOT.BIN 0x0886b2fc
+  - type: textarea
+    id: output
+    attributes:
+      label: Tool output
+      description: For example the output of `python tools/lbpmatch.py <file>`.
+      render: text

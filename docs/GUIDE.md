@@ -19,9 +19,10 @@ The tools run on a **Windows host and drive the compilers inside WSL** (they cal
 
 ## Setup
 
-1. Decrypt your own disc locally (never in a public tree): `python tools/lbpintake.py --iso <your image>` runs the
-   decryptor named by the `decryptor` setting (read-only use) and writes the decrypted modules under `inputs/`
-   (gitignored).
+1. Decrypt `PSP_GAME/SYSDIR/EBOOT.BIN` of your own disc locally (never in a public tree) with a tool of your choice,
+   into `inputs/` (gitignored); this repository has no decryption code. If you have a PSP game decryptor script,
+   `python tools/lbpintake.py --iso <your image> --decryptor <script>` runs it read-only and writes the decrypted
+   modules under `inputs/`; the maintainers' `decryptor` setting names theirs, which is not published.
 2. Describe your machine: `copy lbp-config.example.json lbp-config.json`, edit, then
    `python tools/lbpconfig.py check`. Every key can be overridden by `LBP_<KEY>`.
 3. Create the campaign directory from the decrypted modules (checks each against `data/modules.json`):

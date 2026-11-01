@@ -309,13 +309,11 @@ class Run:
                 home = P.kit_home(prof["kit"])
                 bopt = f"-B {home}/{prof['B']} " if prof.get("B") else ""
                 # the i386 Sony kits cannot stat files on /mnt/c: compile a copy in a native temporary directory, with
-                # a copy of include/ as the -I directory (profile_record's include_option, as tools/lbpmatch.py)
-                cmds.append(f"t=$(mktemp -d /tmp/lbpproof.XXXXXX) && cp {q(P.to_wsl(c.path))} $t/ && "
-                            f"cp -r {q(P.to_wsl(include))} $t/include && cd $t && "
-                            f"{home}/{prof['driver']} {bopt}-c {prof['flags']} {lang} -I include -o obj.o "
-                            f"{q(c.path.name)} "
-                            f"> log 2>&1; cp log {q(P.to_wsl(log))}; [ -f obj.o ] && cp obj.o {q(P.to_wsl(obj))}; "
-                            f"cd / && rm -rf $t")
+                # ./include linked to the batch's one native copy of include/ (profile_record's include_option;
+                # tools/lbpmatch.py gcc_job and gcc_batch, which say why)
+                cmds.append(M.gcc_job(c.path, log, obj,
+                                      f"{home}/{prof['driver']} {bopt}-c {prof['flags']} {lang} -I include -o obj.o "
+                                      f"{q(c.path.name)}", "lbpproof"))
             elif prof["compiler"] == "snc":
                 native_jobs.append((c, prof, obj, log))
             else:
@@ -334,7 +332,8 @@ class Run:
         if cmds:
             jobs = self.dir / "own.jobs"
             jobs.write_text("\n".join(cmds) + "\n", encoding="utf-8", newline="\n")
-            P.run_wsl_script(f"tr '\\n' '\\0' < {q(P.to_wsl(jobs))} | xargs -0 -P {self.parallel} -n 1 sh -c",
+            P.run_wsl_script("\n".join(M.gcc_batch(f"tr '\\n' '\\0' < {q(P.to_wsl(jobs))} | xargs -0 -P "
+                                                   f"{self.parallel} -n 1 sh -c", include)),
                              self.dir, "own-compile")
         return out
 

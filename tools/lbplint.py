@@ -128,6 +128,7 @@ def main() -> int:
               "flags": {k: len(v) for k, v in flags.items()},
               "declared_symbols": len(decls), "conflicting_symbols": len(conflicts),
               "files": {k: v for k, v in flags.items()}, "conflicts": conflicts}
+    args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("sources", "note_kinds", "flags", "declared_symbols",
                                                "conflicting_symbols")}, indent=1))
