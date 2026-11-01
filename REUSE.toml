@@ -33,6 +33,7 @@ path = [
   "lbp-config.example.json",
   ".gitignore",
   ".gitattributes",
+  ".recomp.json",
 ]
 SPDX-FileCopyrightText = "2026 Jstar269 and contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"

@@ -1,0 +1,74 @@
+{
+ "measures": {
+  "fuzzy_match_percent": 16.995,
+  "total_code": "2860396",
+  "matched_code": "486116",
+  "matched_code_percent": 16.995,
+  "total_data": "0",
+  "matched_data": "0",
+  "matched_data_percent": 0.0,
+  "total_functions": 0,
+  "matched_functions": 0,
+  "matched_functions_percent": 0.0,
+  "complete_code": "0",
+  "complete_code_percent": 0.0,
+  "complete_data": "0",
+  "complete_data_percent": 0.0,
+  "total_units": 1,
+  "complete_units": 0
+ },
+ "units": [
+  {
+   "name": "EBOOT.BIN",
+   "measures": {
+    "fuzzy_match_percent": 16.995,
+    "total_code": "2860396",
+    "matched_code": "486116",
+    "matched_code_percent": 16.995,
+    "total_data": "0",
+    "matched_data": "0",
+    "matched_data_percent": 0.0,
+    "total_functions": 0,
+    "matched_functions": 0,
+    "matched_functions_percent": 0.0,
+    "complete_code": "0",
+    "complete_code_percent": 0.0,
+    "complete_data": "0",
+    "complete_data_percent": 0.0,
+    "total_units": 1,
+    "complete_units": 0
+   },
+   "metadata": {
+    "module_name": "EBOOT.BIN",
+    "progress_categories": [
+     "EBOOT.BIN"
+    ]
+   }
+  }
+ ],
+ "version": 2,
+ "categories": [
+  {
+   "id": "EBOOT.BIN",
+   "name": "EBOOT.BIN",
+   "measures": {
+    "fuzzy_match_percent": 16.995,
+    "total_code": "2860396",
+    "matched_code": "486116",
+    "matched_code_percent": 16.995,
+    "total_data": "0",
+    "matched_data": "0",
+    "matched_data_percent": 0.0,
+    "total_functions": 0,
+    "matched_functions": 0,
+    "matched_functions_percent": 0.0,
+    "complete_code": "0",
+    "complete_code_percent": 0.0,
+    "complete_data": "0",
+    "complete_data_percent": 0.0,
+    "total_units": 1,
+    "complete_units": 0
+   }
+  }
+ ]
+}
