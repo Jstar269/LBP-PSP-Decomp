@@ -88,6 +88,24 @@ class PrCheckTests(unittest.TestCase):
         got = sorted(r.split()[0] + " " + r.split()[1] for r in self.refusals())
         self.assertEqual(got, ["gate src/eboot/asm.c:", "header src/eboot/no_header.c:", "header src/eboot/no_note.c:"])
 
+    def test_note_rules_agree_with_published_sources(self) -> None:
+        body = "int FUN_00010000(void) { return 0; }\n"
+        zlib = ("/* zlib 1.2.3 (zlib.net, zlib-1.2.3.tar.gz md5 debc62758716a169df9f62e6ab2bc634), inflate.c; the\n"
+                "   function verbatim from inflate.c. */\n")                 # the published zlib sources' note
+        self.write("src/eboot/zlib_x.c", HEADER + zlib + body)
+        self.write("src/eboot/annotated.c", HEADER + "/* see docs/TOOLCHAIN.md */\n" + NOTE + body)
+        self.write("wip/near_00010000.c", HEADER + body + "// near miss from lane x (unreviewed)\n")
+        self.commit("ok")
+        self.assertEqual(self.refusals(), [])
+        self.write("wip/twice_00010000.c", HEADER + HEADER + body)
+        self.write("src/eboot/late_note.c", HEADER + "/* a */\n/* b */\n/* c */\n" + NOTE + body)
+        self.commit("bad")
+        got = sorted(r.split()[0] + " " + r.split()[1] for r in self.refusals())
+        self.assertEqual(got, ["header src/eboot/late_note.c:", "header wip/twice_00010000.c:"])
+        import lbplint
+        self.assertEqual(lbplint.provenance_note(HEADER + zlib + body)[0], "library")
+        self.assertEqual(lbplint.provenance_note(HEADER + "int x;\n" + NOTE), (None, ""))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -150,9 +150,11 @@ source that started from a generated candidate names the generator tag.
   `/* Ghidra pseudocode (lbpgen.py tag <tag>) corrected by hand: <what you changed>; exact match verified; names and types await human review. */`
 - The tools write the other kinds themselves: `Mechanical translation of Ghidra pseudocode (lbpgen.py tag X)`,
   `Clone of src/... (lbpclone.py tag X)`, `... (template instance, lbptmpl.py tag X)` and
-  `Library source: newlib <release> <dir>/<file>.c function <name>, ...`.
+  `Library source: newlib <release> <dir>/<file>.c function <name>, ...`; the zlib sources name their release first
+  (`zlib 1.2.3 (zlib.net, <archive> md5 <digest>), <file>.c; ...`).
 
-`python tools/lbplint.py` rejects a source without a known note kind.
+A one-line pointer comment may sit between the header and the note; nothing else may. `python tools/lbplint.py` and
+`python tools/lbpprcheck.py` reject a source without a known note kind there.
 
 ## Inline VFPU asm (LBP project rule)
 
@@ -180,7 +182,8 @@ The owner reviews every source at the end, so aim for the code the developers wr
 ## Near misses
 
 If a function ends within about six differing words but not exact, save your best attempt to
-`wip/<short_name>_<addr8>.cpp` (same header) with trailing `//` comments: what differs and what you ruled out. Files
+`wip/<short_name>_<addr8>.cpp` (the same line-1 header, once; a near miss needs no provenance note) with trailing `//`
+comments: what differs and what you ruled out. Files
 in `wip/` are not built by `--all` and are not verified; they are leads for the next person.
 
 ## Compiler notes

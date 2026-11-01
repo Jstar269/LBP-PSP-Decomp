@@ -36,9 +36,38 @@ NOTE_KINDS = (("clone", re.compile(r"Clone of src/\S+ \(lbpclone\.py tag [\w./-]
               ("xclone", re.compile(r"Clone of hst-decomp src/\S+ \(lbpxclone\.py tag [\w./-]+\)")),
               ("corrected", re.compile(r"Ghidra pseudocode \(lbpgen\.py tag [^)]+\) corrected by hand")),
               ("generated", re.compile(r"Mechanical translation of Ghidra pseudocode \(lbpgen\.py tag [\w./-]+\)")),
-              ("library", re.compile(r"Library source: newlib ")),
+              ("library", re.compile(r"Library source: newlib |^\s*zlib \d+\.\d+\.\d+ \(zlib\.net, ")),
               ("template", re.compile(r"[^.;]*\(template instance, lbptmpl\.py tag [\w./-]+\)")),
               ("hand", re.compile(r"Hand-written reconstruction\b")))
+# One-line comments that may sit between the header and the note (pointers such as a docs/ reference), as in
+# hst-decomp (hstlint.provenance_note).
+ANNOTATIONS_BEFORE_NOTE = 2
+LEADING_COMMENT = re.compile(r"[ \t]*\n?[ \t]*/\*(.*?)\*/", re.S)
+
+
+def provenance_note(text: str) -> tuple[str | None, str]:
+    """(kind, comment) of a source's provenance note (CONTRIBUTING.md, "Line 2: the note"): the comment right after the
+    header line (it may span lines, as the zlib sources' notes do), or, after at most ANNOTATIONS_BEFORE_NOTE one-line
+    annotation comments, the first one of a NOTE_KINDS kind. (None, the comment after the header or "") when there is
+    none. The one rule lbplint.py and lbpprcheck.py share."""
+    first, sep, rest = text.partition("\n")
+    if not sep:
+        return None, ""
+    pos, seen = 0, []
+    for _ in range(ANNOTATIONS_BEFORE_NOTE + 1):
+        m = LEADING_COMMENT.match(rest, pos)
+        if not m:
+            break
+        seen.append(m.group(0).strip())
+        kind = next((k for k, rx in NOTE_KINDS if rx.search(m.group(1))), None)
+        if kind:
+            return kind, m.group(0).strip()
+        if "\n" in m.group(1):                  # an annotation is one line; a longer comment is not one
+            break
+        pos = m.end()
+    return None, seen[0] if seen else ""
+
+
 DUPCOND = re.compile(r"if\s*\(([^()\n]*(?:\([^()\n]*\)[^()\n]*)*)\)\s*\{\s*\n?\s*if\s*\(\1\)")
 SELF = re.compile(r"(?<![\w.>])(\w+)\s*=\s*\1\s*;")
 DECL = re.compile(r"^(?:extern\s+)?(?:\"C\"\s+)?([A-Za-z_][\w\s\*]*?)\s*\b((?:FUN|DAT|PTR)_[0-9a-fA-F]{8})\b\s*(\([^;{]*\)|\[[^\]]*\])?\s*;",
@@ -97,9 +126,7 @@ def main() -> int:
             flags["gate"].append(rel)
         if any(f.severity == lbpgate.IDIOM for f in gate):
             flags["gate-idiom"].append(rel)
-        comments = re.findall(r"/\*.*?\*/", text[:4000], re.S)
-        note = comments[1] if len(comments) > 1 and len(lines) > 1 and lines[1].startswith("/*") else ""
-        kind = next((k for k, rx in NOTE_KINDS if rx.search(note)), None)
+        kind, note = provenance_note(text)
         if kind is None and rel not in flags["header"]:
             flags["header"].append(rel)
         kinds[kind or "unknown"] += 1

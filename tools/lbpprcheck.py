@@ -17,7 +17,10 @@ adds or changes:
                   instruction word, a mnemonic): disassembly of the game is never published
   symbols         a deleted or changed line in symbols/ (the symbol maps are append-only)
   header          a source in src/ or wip/ whose first line is not an LBPMATCH header with module, start, end and
-                  symbol, or whose second line is not one of the provenance notes CONTRIBUTING.md lists
+                  symbol, or that repeats the header further down; a source in src/ without one of the provenance
+                  notes CONTRIBUTING.md lists right after the header (tools/lbplint.py provenance_note: one-line
+                  annotations may come first). A near miss in wip/ needs the header only (CONTRIBUTING.md, "Near
+                  misses"), as hst-decomp's tools/hstprcheck.py
   gate            a source the fake-match gate refuses (tools/lbpgate.py: asm that emits instructions, data
                   directives, code-emitting pragmas, extra= under src/)
 
@@ -110,11 +113,14 @@ def check(repo: Path, base: str) -> list[str]:
         if path.startswith("symbols/") and status == "M" and removed_lines(repo, base, path):
             refusals.append(f"symbols  {path}: existing lines changed or deleted (append only)")
         if re.match(r"^(src|wip)/.*\.(c|cpp)$", path):
-            lines = data.decode("utf-8", "replace").split("\n", 2)
+            text = data.decode("utf-8", "replace")
+            lines = text.split("\n")
             if not HEADER.match(lines[0]):
                 refusals.append(f"header   {path}: line 1 is not a {MATCH} header with module, start, end, symbol")
-            elif len(lines) < 2 or not any(rx.search(lines[1]) for _kind, rx in lbplint.NOTE_KINDS):
-                refusals.append(f"header   {path}: line 2 is not a provenance note CONTRIBUTING.md lists")
+            elif any(ln.lstrip().startswith(f"/* {MATCH} ") for ln in lines[1:]):
+                refusals.append(f"header   {path}: a second {MATCH} header after line 1")
+            elif path.startswith("src/") and lbplint.provenance_note(text)[0] is None:
+                refusals.append(f"header   {path}: no provenance note CONTRIBUTING.md lists right after the header")
             found = lbpgate.refusals(lbpgate.check_file(file, repo))
             if found:
                 refusals.append(f"gate     {path}: " + "; ".join(str(f) for f in found)[:200])
