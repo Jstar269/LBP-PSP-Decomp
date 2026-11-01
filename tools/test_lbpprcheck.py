@@ -60,9 +60,10 @@ class PrCheckTests(unittest.TestCase):
         self.write("try/me/scratch.c", "int x;\n")
         self.write("campaign/ledger/campaign.json", "{}\n")
         self.write("lbp-config.json", "{}\n")
+        self.write("data/functions-EBOOT.BIN.txt", "8804000 8804024 auto\n")
         self.commit("bad")
         kinds = sorted(r.split()[0] for r in self.refusals())
-        self.assertEqual(kinds, ["binary", "binary", "place", "place", "place"])
+        self.assertEqual(kinds, ["binary", "binary", "place", "place", "place", "place"])
 
     def test_private_paths_secrets_and_dumps(self) -> None:
         self.write("docs/a.md", "see C:" + "\\Users\\someone\\game\n")   # split: this file is checked too

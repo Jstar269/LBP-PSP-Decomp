@@ -8,7 +8,8 @@ adds or changes:
 
   binary          a binary file (git sees it as binary, or it holds a NUL byte), or a name the ignore rules keep
                   out for that reason (retail modules, objects, images of discs, archives, compilers, key files)
-  place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json
+  place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json,
+                  the disc-derived files tools/lbppublish.py keeps private (data/functions-*.txt and the rest)
   size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big)
   private         an added line with a personal or secret value: a home directory path (C:\\Users\\..., /home/...,
                   /mnt/c/Users/...), a private key block, a GitHub, OpenAI or AWS token
@@ -35,6 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbpgate
 import lbplint
+import lbppublish
 
 MATCH = "LBPMATCH"
 CONFIG = "lbp-config.json"
@@ -86,7 +88,7 @@ def check(repo: Path, base: str) -> list[str]:
         if Path(path).suffix.lower() in BINARY_SUFFIXES or path in binaries:
             refusals.append(f"binary   {path}: binary files and game data are never added")
             continue
-        if any(p.search(path) for p in NEVER):
+        if any(p.search(path) for p in NEVER) or path in lbppublish.DISC_DERIVED:
             refusals.append(f"place    {path}: this path is never versioned")
             continue
         data = file.read_bytes() if file.is_file() else b""
