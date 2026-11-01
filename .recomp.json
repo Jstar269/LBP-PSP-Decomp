@@ -1,0 +1,46 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "LittleBigPlanet",
+  "system": "PSP",
+  "type": "decomp",
+  "original": {
+    "region": "USA",
+    "revision": "2.00",
+    "serial": "UCUS98744"
+  },
+  "project": "lbp-psp-decomp",
+  "status": "in-progress",
+  "toolchain": [
+    "GCC 4.0.4 (pspdev Allegrex patch)",
+    "binutils 2.14 assembler (decomp.me PSP compiler kits)"
+  ],
+  "approach": "Strict matching decompilation: a function counts only when its compiled and linked bytes equal the original exactly, with nothing masked.",
+  "maintainers": [
+    {
+      "name": "Jstar269",
+      "link": "https://github.com/Jstar269"
+    }
+  ],
+  "links": [
+    {
+      "label": "GitHub",
+      "url": "https://github.com/Jstar269/lbp-psp-decomp"
+    },
+    {
+      "label": "Recompilation (Nakagawa Recomp)",
+      "url": "https://github.com/Jstar269/nakagawa-recomp"
+    },
+    {
+      "label": "Hot Shots Tennis: Get a Grip decompilation",
+      "url": "https://github.com/Jstar269/hst-decomp"
+    }
+  ],
+  "help": [
+    "matched functions",
+    "near misses with notes",
+    "compiler findings",
+    "tool fixes",
+    "documentation"
+  ],
+  "notes": "Work in progress on the game executable (EBOOT.BIN). The progress bar comes from the published objdiff report, which is generated from data/public-figures.json: the share of the public scope (the game's own code and the open-source libraries it links) that published sources reproduce byte for byte. Contains no game data, keys or decryption code; Sony SDK code the game links is not reconstructed here. You build and verify against your own copy of the game."
+}

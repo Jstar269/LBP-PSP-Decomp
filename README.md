@@ -21,6 +21,14 @@ The public scope is the game's own code and the open-source libraries it links. 
 100% scope ([`docs/COMPLETION.md`](docs/COMPLETION.md)) but not in the public figure.
 [`data/public-figures.json`](data/public-figures.json) has the figures.
 
+Progress trackers read [`docs/objdiff-report.json`](docs/objdiff-report.json), an objdiff report with the module
+totals and no per-function detail. Its number is the one in `data/public-figures.json`: the maintainers measure that
+file from the private proofs, then run `python tools/lbpreport.py` and commit the result (`--check` compares them).
+Public CI cannot build the project, so [`progress-report.yml`](.github/workflows/progress-report.yml) only uploads the
+committed file as the artifact `UCUS98744_report`. Trackers show tier T1 (functions that match exactly in
+isolation), as objdiff-based trackers do for other projects; the headline above is tier T2 (bytes the in-place
+rebuild produces), which trails T1 until the next full build.
+
 ## Contents
 
 - `src/`: the reconstructed game code, and matched open-source library code the game links (newlib, zlib 1.2.3, GNU
