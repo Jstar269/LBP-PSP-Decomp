@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbporigin as O  # noqa: E402
 import lbppublish as P  # noqa: E402
+import lbpreport as R  # noqa: E402
 
 REGIONS = {"EBOOT.BIN": [(0x1000, 0x1100, "startup"), (0x1100, 0x5000, "game"), (0x5000, 0x5100, "unattributed"),
                          (0x5100, 0x9000, "sony-sdk"), (0x7000, 0x8000, "libstdc++")]}
@@ -114,12 +115,15 @@ class PublishTests(unittest.TestCase):
         f = P.figures({"src/g.c", "src/n.c"}, classes, REGIONS, inv, proofs)["EBOOT.BIN"]
         # scope: two game functions (0x200), the libstdc++ one (0x20) and the published newlib one (0x40)
         self.assertEqual((f["public_scope_bytes"], f["public_t1_bytes"]), (0x260, 0x140))
+        # function counts follow the same rules: four in scope, two with an accepted proof of a published source
+        self.assertEqual((f["public_scope_functions"], f["public_t1_functions"]), (4, 2))
         # a held-back Sony source in the game region leaves the public scope
         proofs.append({"module": "EBOOT.BIN", "start": "0x00001200", "end": "0x00001300", "source": "src/h.c",
                        "status": "EXACT"})
         classes["src/h.c"] = "sony-sdk"
         f = P.figures({"src/g.c", "src/n.c"}, classes, REGIONS, inv, proofs)["EBOOT.BIN"]
         self.assertEqual((f["public_scope_bytes"], f["public_t1_bytes"]), (0x160, 0x140))
+        self.assertEqual((f["public_scope_functions"], f["public_t1_functions"]), (3, 2))
         self.assertEqual(f["strict_scope_bytes"], 0x2a0)
         self.assertTrue(f["t2"].startswith("not measured"))
 
@@ -138,6 +142,7 @@ class PublishTests(unittest.TestCase):
         f = P.figures({"src/g.c"}, classes, REGIONS, inv, proofs, {"EBOOT.BIN": report})["EBOOT.BIN"]
         t2 = f["t2"]
         self.assertEqual(f["public_scope_bytes"], 0x200)            # the two game functions
+        self.assertEqual((f["public_scope_functions"], f["public_t1_functions"]), (2, 1))
         self.assertEqual((t2["public_t2_bytes"], t2["public_t2_data_bytes"], t2["image_t2_bytes"]), (0x100, 8, 0x108))
         self.assertEqual(t2["public_t2_percent"], 50.0)
         self.assertEqual(f["t3"], "not measured")
@@ -166,10 +171,49 @@ class PublishTests(unittest.TestCase):
             self.assertEqual(P.audit(tree), 0)
             (tree / "docs" / "x.md").write_text("see C:\\nk\\private\\lbp-decomp\n", encoding="utf-8")
             self.assertEqual(P.audit(tree), 1)
+            (tree / "docs" / "x.md").write_text("https://bytematch.dev/Jstar269/lbp-psp-decomp\n"
+                                                "github.com/Jstar269/lbp-psp-decomp\n"
+                                                '"name": "Jstar269"\n', encoding="utf-8")
+            self.assertEqual(P.audit(tree), 0)    # the owner's public project URLs and handle are allowed
+            (tree / "docs" / "x.md").write_text("written by Jstar269\n", encoding="utf-8")
+            self.assertEqual(P.audit(tree), 1)    # a bare user name is not
             (tree / "docs" / "x.md").write_text("api_key = abcdefghijklmnop\n", encoding="utf-8")
             self.assertEqual(P.audit(tree), 1)
             (tree / "docs" / "x.md").write_text("sha256 0123456789abcdef0123456789abcdef\n", encoding="utf-8")
             self.assertEqual(P.audit(tree), 0)    # a digest is not a key
+
+    def test_the_report_is_made_from_the_figures_and_the_audit_checks_it(self) -> None:
+        inv = {"EBOOT.BIN": {0x1100: 0x1200, 0x1200: 0x1300, 0x6000: 0x6040}}
+        proofs = [{"module": "EBOOT.BIN", "start": "0x00001100", "end": "0x00001200", "source": "src/g.c",
+                   "status": "EXACT"}]
+        figs = P.figures({"src/g.c"}, {"src/g.c": "game"}, REGIONS, inv, proofs)
+        report = R.build_report(figs)
+        m = report["measures"]
+        self.assertEqual((m["total_functions"], m["matched_functions"]), (2, 1))
+        self.assertEqual((m["total_code"], m["matched_code"]), ("512", "256"))
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            (tree / "data").mkdir()
+            (tree / "docs").mkdir()
+            (tree / "README.md").write_text("ok\n", encoding="utf-8")
+            (tree / "ORIGINS.json").write_text("{}", encoding="utf-8")
+            (tree / P.FIGURES).write_text(json.dumps(figs), encoding="utf-8")
+            self.assertEqual(P.audit(tree), 1)                        # the report is missing
+            (tree / R.REPORT_REL).write_text(R.render(report), encoding="utf-8")
+            self.assertEqual(P.audit(tree), 0)
+            stale = json.loads(json.dumps(report))
+            stale["measures"]["matched_functions"] = 2
+            (tree / R.REPORT_REL).write_text(R.render(stale), encoding="utf-8")
+            self.assertEqual(P.audit(tree), 1)                        # the report disagrees with the figures
+
+    def test_the_report_files_are_published(self) -> None:
+        tracked = ["tools/lbpreport.py", "tools/test_lbpreport.py", ".github/workflows/progress-report.yml",
+                   ".recomp.json", "docs/objdiff-report.json"]
+        root = Path(__file__).resolve().parent.parent
+        keep, excluded = P.plan(tracked, set(), {}, root=root)
+        self.assertEqual([p for p in tracked if p not in keep and (root / p).is_file()], [], excluded)
+        for p in tracked:
+            self.assertFalse(P.matches(p, P.PRIVATE_PATHS) or P.matches(p, P.DISC_DERIVED), p)
 
     def test_public_check_refuses_unlisted_or_excluded_sources(self) -> None:
         import lbppublic

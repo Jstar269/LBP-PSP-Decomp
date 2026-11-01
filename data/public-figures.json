@@ -9,7 +9,9 @@
    "unattributed": 5716
   },
   "public_scope_bytes": 2860396,
+  "public_scope_functions": 11671,
   "public_t1_bytes": 486116,
+  "public_t1_functions": 4703,
   "public_t1_percent": 16.995,
   "strict_scope_bytes": 3827976,
   "t2": "not measured (the build report is stale: the accepted ledger changed since the build)",

@@ -18,8 +18,10 @@ Copies every file git tracks (`git ls-files`) into --out, byte for byte, except 
   * files git tracks although .gitignore ignores them (added by force).
 
 Written in addition: ORIGINS.json (the classes of the copied sources only), the public versions of README.md and
-AGENTS.md (PUBLIC_FILES, from docs/public/), and data/public-figures.json (below). Nothing else is generated and no
-file is edited.
+AGENTS.md (PUBLIC_FILES, from docs/public/), data/public-figures.json (below) and docs/objdiff-report.json, which is
+a pure function of those figures (tools/lbpreport.py build_report: the objdiff report progress trackers read, counts
+and percentages only). The report is not tracked in this repository: it is made from the figures in the same run, and
+--audit refuses a tree whose report differs from its figures. Nothing else is generated and no file is edited.
 
 Public figures follow hst-decomp's rule (docs/COMPLETION.md): Sony code kept out of the public tree is not counted in
 the public denominator; it stays in the strict scope. Public scope = the game region and the libstdc++ region of
@@ -29,7 +31,8 @@ matched source is held back (Sony code by its class, wherever it sits). T1 numer
 tools/lbpbuild.py) is read from the public build's report (build/whole/<module>/public/report.json) and counted only
 when that build was byte-identical to the retail module and made from the current accepted ledger: public_t2_bytes =
 the code bytes of the public scope that published sources produce in that identical image (strict: scaffolding never
-counts); the data bytes they produce and their share of the whole image are given beside it. T3 is not measured.
+counts); the data bytes they produce and their share of the whole image are given beside it. T3 is not measured. The same scope and ledger rules give the function counts: public_scope_functions = the functions
+of the public scope, public_t1_functions = those of them with an accepted proof of a published source (counts only).
 
 --audit scans a built tree for: machine or private paths and user names; key-like material; source files whose
 class is not publishable or that ORIGINS.json does not list; files the policy excludes. It also counts, without
@@ -54,6 +57,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbporigin
+import lbpreport
 
 ROOT = lbporigin.ROOT
 
@@ -77,10 +81,11 @@ PUBLIC_FILES = {"docs/public/README.md": "README.md", "docs/public/AGENTS.md": "
 MANIFEST = "ORIGINS.json"
 FIGURES = "data/public-figures.json"
 # machine paths of the maintainers' PCs and user names; the public repository URLs of the owner's projects
-# (github.com/Jstar269/...) and the public copyright line ("Jstar269 and contributors", as hst-decomp) are allowed
+# (github.com/Jstar269/..., the bytematch.dev page of the same name), the public copyright line ("Jstar269 and
+# contributors", as hst-decomp) and the maintainer's public handle in .recomp.json ("name": "Jstar269") are allowed
 PRIVATE_TEXT = re.compile(r"(?i)[a-z]:[\\/]+(?:nk\b|users[\\/]+jstar|psvitabackup|pspzip|all_psp_games)|"
                           r"/mnt/[a-z]/(?:nk\b|users/jstar)|home[\\/]+jstar\b|"
-                          r"(?<!github\.com/)\bjstar(?:269)?\b(?! and contributors)|"
+                          r"(?<!github\.com/)(?<!bytematch\.dev/)(?<!\x22name\x22: \x22)\bjstar(?:269)?\b(?! and contributors)|"
                           r"psp-content-universal|nakagawa-recomp-history-private|"
                           r"\bprivate[\\/]+(?:hst-|lbp-|compilers|campaign-builds|regression|worktrees)")
 AUDIT_SELF = ("tools/lbppublish.py", "tools/test_lbppublish.py")   # they hold the patterns and fixtures themselves
@@ -199,6 +204,7 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
                  or s in published_open[module]}
         scope_bytes = sum(inv[s] - s for s in scope)
         done = sum(min(e, inv[s]) - s for s, (e, _src) in owned[module].items() if s in scope)
+        done_functions = sum(1 for s in owned[module] if s in scope)
         by_region = defaultdict(int)
         for s, e in inv.items():
             by_region[lbporigin.region_class(regions, module, s)] += e - s
@@ -206,6 +212,7 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
         t2 = public_t2(rep, kept_sources, sorted((s, inv[s]) for s in scope), scope_bytes) if isinstance(rep, dict) \
             else rep
         out[module] = {"code_bytes": total, "public_scope_bytes": scope_bytes,
+                       "public_scope_functions": len(scope), "public_t1_functions": done_functions,
                        "public_t1_bytes": done, "public_t1_percent": round(100.0 * done / scope_bytes, 3)
                        if scope_bytes else 0.0,
                        "strict_scope_bytes": total, "code_bytes_by_region_class": dict(sorted(by_region.items())),
@@ -249,6 +256,9 @@ def build(out: Path, list_all: bool) -> int:
                    t2_reports)
     (out / FIGURES).parent.mkdir(parents=True, exist_ok=True)
     (out / FIGURES).write_text(json.dumps(figs, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    (out / lbpreport.REPORT_REL).parent.mkdir(parents=True, exist_ok=True)
+    (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs)), encoding="utf-8",
+                                            newline="\n")
     print(f"public tree: {out}")
     print(f"tracked files: {len(tracked)}; copied: {len(keep)} ({copied} bytes); "
           f"excluded: {sum(len(v) for v in excluded.values())}")
@@ -264,7 +274,8 @@ def build(out: Path, list_all: bool) -> int:
     print("  sources kept by class: " + ", ".join(f"{c} {counts[c]}" for c in lbporigin.CLASSES if counts[c]))
     for module, f in figs.items():
         print(f"  {module}: public T1 {f['public_t1_bytes']}/{f['public_scope_bytes']} B = {f['public_t1_percent']}% "
-              f"(strict scope {f['strict_scope_bytes']} B)")
+              f"({f['public_t1_functions']}/{f['public_scope_functions']} functions; strict scope "
+              f"{f['strict_scope_bytes']} B)")
         t2 = f["t2"]
         print(f"  {module}: public T2 " + (f"{t2['public_t2_bytes']}/{f['public_scope_bytes']} B = {t2['public_t2_percent']}% "
                                            f"(+{t2['public_t2_data_bytes']} data B; {t2['image_t2_percent']}% of the "
@@ -300,6 +311,12 @@ def audit(tree: Path) -> int:
                 notes[f"cross-project clones of hst-decomp sources, published as {cls}"].append(rel)
         elif rel.endswith(".md") and DISASM_LINE.search(text):
             notes["docs with disassembly-like lines"].append(rel)
+    if (tree / FIGURES).exists() or (tree / lbpreport.REPORT_REL).exists():
+        try:
+            for d in lbpreport.differences(lbpreport.load_figures(tree / FIGURES), tree / lbpreport.REPORT_REL):
+                refusals.append(f"{lbpreport.REPORT_REL}: {d}")
+        except (OSError, ValueError, KeyError) as exc:
+            refusals.append(f"{lbpreport.REPORT_REL}: figures and report do not load ({exc!r})")
     for name in ("README.md", "LICENSE", "ORIGINS.json"):
         if not (tree / name).exists():
             notes["missing top-level files"].append(name)

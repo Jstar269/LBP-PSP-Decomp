@@ -1,5 +1,10 @@
 # LittleBigPlanet (PSP) decompilation
 
+[![Code matched](https://bytematch.dev/Jstar269/lbp-psp-decomp.svg?label=code%20matched&measure=matched_code_percent)](https://bytematch.dev/Jstar269/lbp-psp-decomp)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](#licensing)
+[![REUSE status](https://api.reuse.software/badge/github.com/Jstar269/lbp-psp-decomp)](https://api.reuse.software/info/github.com/Jstar269/lbp-psp-decomp)
+[![Platform: PSP (UCUS98744)](https://img.shields.io/badge/PSP-UCUS98744-555555.svg)](#littlebigplanet-psp-decompilation)
+
 A matching decompilation of LittleBigPlanet for the PSP (UCUS98744, disc version 2.00). It rebuilds the game's
 executable as C and C++. A function counts only when its compiled and linked bytes equal the original exactly.
 
@@ -21,13 +26,15 @@ The public scope is the game's own code and the open-source libraries it links. 
 100% scope ([`docs/COMPLETION.md`](docs/COMPLETION.md)) but not in the public figure.
 [`data/public-figures.json`](data/public-figures.json) has the figures.
 
-Progress trackers read [`docs/objdiff-report.json`](docs/objdiff-report.json), an objdiff report with the module
-totals and no per-function detail. Its number is the one in `data/public-figures.json`: the maintainers measure that
-file from the private proofs, then run `python tools/lbpreport.py` and commit the result (`--check` compares them).
-Public CI cannot build the project, so [`progress-report.yml`](.github/workflows/progress-report.yml) only uploads the
-committed file as the artifact `UCUS98744_report`. Trackers show tier T1 (functions that match exactly in
-isolation), as objdiff-based trackers do for other projects; the headline above is tier T2 (bytes the in-place
-rebuild produces), which trails T1 until the next full build.
+Progress trackers (bytematch.dev, recomp.fyi, and the "code matched" badge above) read
+[`docs/objdiff-report.json`](docs/objdiff-report.json), an objdiff report with the module totals (bytes and function
+counts) and no per-function detail. The maintainers' tooling writes it in the same run as `data/public-figures.json`,
+from the same figures, so the two cannot disagree; `python tools/lbpreport.py --check` compares them. Public CI cannot
+build the project, so [`progress-report.yml`](.github/workflows/progress-report.yml) only uploads the committed file as
+the artifact `UCUS98744_report`. Trackers show tier T1 (functions that match exactly in isolation: bytes and function
+counts of the public scope), as objdiff-based trackers do for other projects. The headline above is tier T2 (bytes the
+in-place rebuild produces) as measured on the date given; it is refreshed with each whole-module build and can differ
+from the T1 figure in between.
 
 ## Contents
 
