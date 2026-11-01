@@ -23,7 +23,7 @@
         }
       ],
       "functions_file": "data/functions-EBOOT.BIN.txt",
-      "function_count": 15562
+      "function_count": 15584
     },
     {
       "name": "pspnet_ap_dialog_dummy.prx",

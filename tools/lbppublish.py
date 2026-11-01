@@ -74,6 +74,9 @@ PUBLISH_SYMBOL_MAP = True
 # Function boundary lists published (owner decision 2026-11-01, reversing 2026-10-28 for this list only): addresses
 # and sizes, never bytes or disassembly. A contribution never changes them (tools/lbpprcheck.py).
 FUNCTION_LISTS = ("data/functions-EBOOT.BIN.txt",)
+# The translation units recovered from the program's static constructors (tools/lbptu.py): first and last function
+# start of each, never bytes. The maintainers make it from the disc; a contribution never changes it.
+UNIT_MAPS = ("data/translation-units.json",)
 DISC_DERIVED = ("data/functions-pspnet_ap_dialog_dummy.prx.txt", "data/cceval-sample.json", "data/target-manifest.json", "data/toolchain-manifest.json",
                 "data/accepted-ledger.jsonl", "data/accepted-journal.jsonl")
 SYMBOL_MAPS = ("symbols/",)
@@ -383,8 +386,9 @@ def build(out: Path, list_all: bool) -> int:
         readme.write_text(fill_blocks(readme.read_text(encoding="utf-8"), render_blocks(figs)), encoding="utf-8",
                           newline="\n")
     (out / lbpreport.REPORT_REL).parent.mkdir(parents=True, exist_ok=True)
-    (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs, rows)), encoding="utf-8",
-                                            newline="\n")
+    tus = lbpreport.read_units(out / lbpreport.TU_REL)
+    (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs, rows, tus)),
+                                            encoding="utf-8", newline="\n")
     print(f"public tree: {out}")
     print(f"tracked files: {len(tracked)}; copied: {len(keep)} ({copied} bytes); "
           f"excluded: {sum(len(v) for v in excluded.values())}")
@@ -446,7 +450,8 @@ def audit(tree: Path) -> int:
     if (tree / FIGURES).exists() or (tree / lbpreport.REPORT_REL).exists():
         try:
             for d in lbpreport.differences(lbpreport.load_figures(tree / FIGURES), tree / lbpreport.REPORT_REL,
-                                           lbpreport.load_rows(tree / lbpreport.ROWS_REL)):
+                                           lbpreport.load_rows(tree / lbpreport.ROWS_REL),
+                                           lbpreport.read_units(tree / lbpreport.TU_REL)):
                 refusals.append(f"{lbpreport.REPORT_REL}: {d}")
             if (tree / "README.md").is_file():
                 refusals += block_differences((tree / "README.md").read_text(encoding="utf-8"),

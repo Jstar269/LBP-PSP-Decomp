@@ -10,7 +10,8 @@ adds or changes:
                   out for that reason (retail modules, objects, images of discs, archives, compilers, key files)
   place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json,
                   the disc-derived files tools/lbppublish.py keeps private (DISC_DERIVED); also a change to the
-                  published function boundary list (FUNCTION_LISTS: the maintainers decide boundaries)
+                  published function boundary list (FUNCTION_LISTS: the maintainers decide boundaries) or the
+                  translation-unit map (UNIT_MAPS, tools/lbptu.py)
   size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big); the
                   generated objdiff report (docs/objdiff-report.json, one unit per function) has a 32 MiB limit
   report          that report when its units do not add up to its module figures (tools/lbpreport.py unit_problems)
@@ -115,6 +116,10 @@ def check(repo: Path, base: str) -> list[str]:
         if path in lbppublish.FUNCTION_LISTS:
             refusals.append(f"place    {path}: the function boundary list is the maintainers' (a list you make "
                             "from your own disc stays local)")
+            continue
+        if path in lbppublish.UNIT_MAPS:
+            refusals.append(f"place    {path}: the translation-unit map is the maintainers' (tools/lbptu.py makes it "
+                            "from the disc)")
             continue
         data = file.read_bytes() if file.is_file() else b""
         if path == OBJDIFF_REPORT:

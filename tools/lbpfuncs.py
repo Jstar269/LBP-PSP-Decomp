@@ -8,7 +8,8 @@ address. Nakagawa Recomp's analyzer (tools/analyze.py) is tuned for recompilatio
 harmless, so it over-splits (delay slots and basic blocks become "functions"). This tool finds starts the way the
 compilers lay code out:
 
-  1. the module entry, the export-table targets and every `jal` target inside the code;
+  1. the module entry, the export-table targets, every `jal` target inside the code and every static constructor and
+     destructor `.ctors`/`.dtors` list;
   2. code pointers in data (32-bit relocations whose word points into the code) that sit at a function boundary
      (the word before is the delay slot of a `jr ra`/`j`, or padding, or the target opens a frame) -- jump tables point
      into the middle of functions and are left out;
@@ -175,6 +176,18 @@ def eh_frame_ranges(elf: MI.Elf) -> list[tuple[int, int]]:
     return out
 
 
+def init_fini(elf: MI.Elf) -> list[int]:
+    """The static constructors and destructors .ctors and .dtors list (without the -1 and 0 terminators). Each is a
+    function of its own: GCC emits a translation unit's `_GLOBAL__I_*` and `_GLOBAL__D_*` as its last functions."""
+    out = []
+    for name in (".ctors", ".dtors"):
+        sec = elf.section(name)
+        if sec and sec["type"] == 1:
+            out += [a for a in struct.unpack_from(f"<{sec['size'] // 4}I", elf.data, sec["offset"])
+                    if a not in (0, 0xFFFFFFFF)]
+    return out
+
+
 def find_starts(elf: MI.Elf) -> tuple[list[int], dict]:
     ranges = code_ranges(elf)
     words: dict[int, int] = {}
@@ -205,6 +218,8 @@ def find_starts(elf: MI.Elf) -> tuple[list[int], dict]:
             add((pc & 0xF0000000) | ((w & 0x03FFFFFF) << 2), "jal")
     for a, _b in eh_frame_ranges(elf):
         add(a, "eh_frame")
+    for a in init_fini(elf):
+        add(a, "ctors_dtors")
 
     def boundary_before(t: int) -> bool:
         p1, p2 = words.get(t - 4), words.get(t - 8)

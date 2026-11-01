@@ -187,6 +187,41 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(lbpprcheck.report_problems(R.render(R.build_report(SMALL, ROWS)).encode()), [])
         self.assertTrue(lbpprcheck.report_problems(b"[]"))
 
+    def test_recovered_units_come_first_and_hold_all_their_functions(self) -> None:
+        tus = {"M.BIN": [(0x100, 0x120, "tu-001@00000100")]}
+        rep = R.build_report(SMALL, ROWS, tus)
+        self.assertEqual([u["name"] for u in rep["units"]],
+                         ["M.BIN/tu-001@00000100", "src/m/b.cpp", "M.BIN/not-yet-recovered/FUN_00000138"])
+        tu = rep["units"][0]
+        self.assertEqual([f["name"] for f in tu["functions"]], ["do_a", "FUN_00000120"])
+        self.assertEqual(tu["measures"]["total_functions"], 2)
+        self.assertEqual(tu["measures"]["matched_functions"], 1)
+        self.assertEqual(tu["metadata"], {"complete": False, "module_name": "M.BIN", "progress_categories": ["M.BIN"]})
+        self.assertEqual(R.unit_problems(rep), [])
+        self.assertEqual(rep["measures"]["complete_units"], 0)
+
+    def test_a_unit_is_complete_when_every_function_is_matched(self) -> None:
+        tus = {"M.BIN": [(0x100, 0x100, "tu-001@00000100"), (0x128, 0x138, "tu-002@00000128")]}
+        rep = R.build_report(SMALL, ROWS, tus)
+        first, second = rep["units"][0], rep["units"][2]
+        self.assertEqual(first["metadata"]["source_path"], "src/m/a.c")
+        self.assertTrue(first["metadata"]["complete"])
+        self.assertEqual(first["measures"]["complete_units"], 1)
+        self.assertFalse(second["metadata"]["complete"])
+        self.assertEqual((rep["measures"]["complete_code"], rep["measures"]["complete_units"]), ("32", 1))
+        self.assertEqual(rep["categories"][0]["measures"]["complete_units"], 1)
+
+    def test_units_file_is_read_by_interval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tu.json"
+            path.write_text(json.dumps({"about": "x", "modules": {"M.BIN": [
+                {"name": "tu-002@00000128", "first": "0x00000128", "last": "0x00000138"},
+                {"name": "tu-001@00000100", "first": "0x00000100", "last": "0x00000120"}]}}), encoding="utf-8")
+            units = R.read_units(path)["M.BIN"]
+            self.assertEqual(R.read_units(Path(tmp) / "none.json"), {})
+        self.assertEqual([R.unit_of(units, a) for a in (0xFC, 0x100, 0x120, 0x124, 0x138, 0x13C)],
+                         [None, "tu-001@00000100", "tu-001@00000100", None, "tu-002@00000128", None])
+
     def test_cli_uses_the_rows_of_a_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tree = Path(tmp)

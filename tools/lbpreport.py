@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The public objdiff progress report (docs/objdiff-report.json), a pure function of data/public-figures.json and
-data/public-functions.txt.
+"""The public objdiff progress report (docs/objdiff-report.json), a pure function of data/public-figures.json,
+data/public-functions.txt and data/translation-units.json.
 
     python tools/lbpreport.py [--tree DIR]           write DIR/docs/objdiff-report.json from DIR's figures and rows
     python tools/lbpreport.py --check [--tree DIR]   exit 1 when DIR's report differs from DIR's figures and rows
@@ -22,14 +22,18 @@ categories (one per module) carry every field; a unit leaves out its zero fields
 per line.
 
 UNITS (what bytematch.dev draws as its grid: one tile per unit, one tile per function when a unit is opened), from
-data/public-functions.txt, one row per function of the public scope:
-  src/<dir>/<file>                      a published source with an accepted proof: its function, with
-                                        metadata.source_path its path
-  <module>/not-yet-recovered/FUN_<addr> a function of the public scope that no published source matches yet;
-                                        auto_generated, since it is no source file
-The program carries no evidence of its original source files (unlike hst-decomp's debug build), so there are no
-recovered translation units. Units are in address order; their code and function counts add up to the module figures
-(`unit_problems` checks it, and build_report refuses rows that disagree with the figures).
+data/public-functions.txt, one row per function of the public scope, in this order of precedence:
+  <module>/tu-<index>@<first address>   a translation unit of the game recovered from the program's static
+                                        constructors (data/translation-units.json, tools/lbptu.py, which also gives the
+                                        evidence for each end): all its functions of the public scope, matched or not;
+                                        complete when every one is matched, source_path only when they are all in one
+                                        published source. The program keeps no file names, so a unit has a number
+  src/<dir>/<file>                      a published source with an accepted proof outside any recovered unit: its
+                                        function, with metadata.source_path its path
+  <module>/not-yet-recovered/FUN_<addr> a function of the public scope in neither; auto_generated, since it is no
+                                        source file
+Units are in address order; their code and function counts add up to the module figures (`unit_problems` checks it,
+and build_report refuses rows that disagree with the figures).
 
 WHAT THE NUMBERS MEAN (honest by construction). The report is always tier T1, so bytes and functions share one basis
 (the whole-module build, T2, has no function count; its figure is the README headline, not the trackers').
@@ -40,19 +44,21 @@ WHAT THE NUMBERS MEAN (honest by construction). The report is always tier T1, so
                                  (public_scope_functions, public_t1_functions)
   fuzzy_match_percent            equal to matched_code_percent: near misses are not counted
   total_data / matched_data      0 and 0: data is not a progress claim here
-  complete_*                     0: nothing is linked from the decompiled sources as a finished unit
+  complete_code / complete_units the code and number of recovered units whose every function is matched
 The report carries what the public tree already publishes: function names (FUN_<address> or a source's header name),
 addresses and sizes (data/functions-EBOOT.BIN.txt), and source paths. No game bytes, disassembly or decompiler output.
 """
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIGURES_REL = "data/public-figures.json"
 ROWS_REL = "data/public-functions.txt"
+TU_REL = "data/translation-units.json"
 REPORT_REL = "docs/objdiff-report.json"
 FIGURES_PATH = ROOT / FIGURES_REL
 ROWS_PATH = ROOT / ROWS_REL
@@ -68,7 +74,8 @@ def pct(part: int, whole: int) -> float:
     return round(100 * part / whole, 3) if whole else 0.0
 
 
-def measures(total_code: int, matched_code: int, total_functions: int, matched_functions: int, units: int) -> dict:
+def measures(total_code: int, matched_code: int, total_functions: int, matched_functions: int, units: int,
+             complete_code: int = 0, complete_units: int = 0) -> dict:
     """One objdiff `Measures` message (JSON form): u64 as strings, u32 and floats as numbers."""
     matched_pct = pct(matched_code, total_code)
     return {"fuzzy_match_percent": matched_pct,
@@ -76,13 +83,16 @@ def measures(total_code: int, matched_code: int, total_functions: int, matched_f
             "total_data": "0", "matched_data": "0", "matched_data_percent": 0.0,
             "total_functions": total_functions, "matched_functions": matched_functions,
             "matched_functions_percent": pct(matched_functions, total_functions),
-            "complete_code": "0", "complete_code_percent": 0.0, "complete_data": "0", "complete_data_percent": 0.0,
-            "total_units": units, "complete_units": 0}
+            "complete_code": str(complete_code), "complete_code_percent": pct(complete_code, total_code),
+            "complete_data": "0", "complete_data_percent": 0.0,
+            "total_units": units, "complete_units": complete_units}
 
 
-def unit_measures(code: int, matched_code: int, functions: int, matched_functions: int) -> dict:
+def unit_measures(code: int, matched_code: int, functions: int, matched_functions: int,
+                  complete: bool = False) -> dict:
     """A unit's `Measures` without its zero fields (pbjson leaves defaults out)."""
-    return {k: v for k, v in measures(code, matched_code, functions, matched_functions, 0).items()
+    return {k: v for k, v in measures(code, matched_code, functions, matched_functions, 0,
+                                      code if complete else 0, int(complete)).items()
             if v not in (0, 0.0, "0")}
 
 
@@ -137,13 +147,32 @@ def function_item(name: str, start: int, size: int, matched: int) -> dict:
     return item
 
 
-def module_units(module: str, rows: list[tuple]) -> list[dict]:
-    """The units of one module from its rows (see UNITS above), in address order."""
+def read_units(path: Path) -> dict[str, list[tuple[int, int, str]]]:
+    """{module: [(first, last, name)]} from data/translation-units.json ({} when there is none)."""
+    if not path.exists():
+        return {}
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return {m: sorted((int(u["first"], 16), int(u["last"], 16), u["name"]) for u in us)
+            for m, us in doc["modules"].items()}
+
+
+def unit_of(units: list[tuple[int, int, str]], start: int) -> str | None:
+    """The recovered unit holding the function at `start`, else None."""
+    i = bisect.bisect_right(units, (start, 0xFFFFFFFF)) - 1
+    return units[i][2] if i >= 0 and units[i][0] <= start <= units[i][1] else None
+
+
+def module_units(module: str, rows: list[tuple], tus: list[tuple[int, int, str]] | None = None) -> list[dict]:
+    """The units of one module from its rows and its recovered units (see UNITS above), in address order."""
     by_source: dict[str, list[tuple]] = {}
+    in_tu: dict[str, list[tuple]] = {}
     keyed: list[tuple[int, dict]] = []
     for row in sorted(rows):
         start, size, _matched, source, _name = row
-        if source:
+        tu = unit_of(tus, start) if tus else None
+        if tu:
+            in_tu.setdefault(tu, []).append(row)
+        elif source:
             by_source.setdefault(source, []).append(row)
         else:
             fname = f"FUN_{start:08x}"
@@ -152,6 +181,19 @@ def module_units(module: str, rows: list[tuple]) -> list[dict]:
                                   "functions": [function_item(fname, start, size, 0)],
                                   "metadata": {"complete": False, "module_name": module,
                                                "progress_categories": [module], "auto_generated": True}}))
+    for tu, fs in in_tu.items():
+        code, done = sum(r[1] for r in fs), sum(r[2] for r in fs)
+        matched = [r for r in fs if r[3]]
+        complete = len(matched) == len(fs)
+        meta = {"complete": complete, "module_name": module, "progress_categories": [module]}
+        paths = {r[3] for r in matched}
+        if complete and len(paths) == 1:
+            meta["source_path"] = paths.pop()
+        keyed.append((fs[0][0], {"name": f"{module}/{tu}",
+                                 "measures": unit_measures(code, done, len(fs), len(matched), complete),
+                                 "functions": [function_item(n or f"FUN_{s:08x}", s, size, m)
+                                               for s, size, m, _src, n in fs],
+                                 "metadata": meta}))
     for source, fs in by_source.items():
         code, done = sum(r[1] for r in fs), sum(r[2] for r in fs)
         keyed.append((fs[0][0], {"name": source, "measures": unit_measures(code, done, len(fs), len(fs)),
@@ -162,11 +204,14 @@ def module_units(module: str, rows: list[tuple]) -> list[dict]:
     return [u for _s, u in sorted(keyed, key=lambda t: t[0])]
 
 
-def build_report(figures: dict, rows: dict[str, list[tuple]] | None = None) -> dict:
+def build_report(figures: dict, rows: dict[str, list[tuple]] | None = None,
+                 tus: dict[str, list[tuple[int, int, str]]] | None = None) -> dict:
     """The report for the content of data/public-figures.json and, when given, data/public-functions.txt (without the
-    rows, one unit per module). Refuses rows that do not add up to the figures."""
+    rows, one unit per module) and data/translation-units.json (read_units). Refuses rows that do not add up to the
+    figures."""
     units, categories = [], []
     sums = [0, 0, 0, 0]
+    complete = [0, 0]
     for name, fig in figures.items():
         row = module_figure(name, fig)
         if rows is None:
@@ -178,12 +223,15 @@ def build_report(figures: dict, rows: dict[str, list[tuple]] | None = None) -> d
             if got != row:
                 raise ValueError(f"{name}: the rows give {got} (scope bytes, matched bytes, functions, matched "
                                  f"functions), the figures {row}")
-            mod_units = module_units(name, mine)
-        m = measures(*row, len(mod_units))
+            mod_units = module_units(name, mine, (tus or {}).get(name))
+        done = [u for u in mod_units if u["metadata"].get("complete")]
+        mine_complete = [sum(int(u["measures"]["total_code"]) for u in done), len(done)]
+        m = measures(*row, len(mod_units), *mine_complete)
         units.extend(mod_units)
         categories.append({"id": name, "name": name, "measures": m})
         sums = [a + b for a, b in zip(sums, row)]
-    return {"measures": measures(*sums, len(units)), "units": units, "version": REPORT_VERSION,
+        complete = [a + b for a, b in zip(complete, mine_complete)]
+    return {"measures": measures(*sums, len(units), *complete), "units": units, "version": REPORT_VERSION,
             "categories": categories}
 
 
@@ -228,11 +276,12 @@ def load_figures(path: Path = FIGURES_PATH) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def differences(figures: dict, path: Path = REPORT_PATH, rows: dict[str, list[tuple]] | None = None) -> list[str]:
-    """Why the report at `path` does not match the figures and rows (an empty list when it does)."""
+def differences(figures: dict, path: Path = REPORT_PATH, rows: dict[str, list[tuple]] | None = None,
+                tus: dict[str, list[tuple[int, int, str]]] | None = None) -> list[str]:
+    """Why the report at `path` does not match the figures, rows and units (an empty list when it does)."""
     if not path.exists():
         return [f"{path.name} does not exist"]
-    want = build_report(figures, rows)
+    want = build_report(figures, rows, tus)
     text = path.read_text(encoding="utf-8")
     try:
         have = json.loads(text)
@@ -260,11 +309,12 @@ def main() -> int:
         return 2
     figures = load_figures(figures_path)
     rows = load_rows(args.tree / ROWS_REL)
-    report = build_report(figures, rows)
+    tus = read_units(args.tree / TU_REL)
+    report = build_report(figures, rows, tus)
     total = report["measures"]
     diffs: list[str] = []
     if args.check:
-        diffs = differences(figures, report_path, rows)
+        diffs = differences(figures, report_path, rows, tus)
         print("objdiff report: " + ("agrees with data/public-figures.json" if not diffs else "DIFFERS"))
         for d in diffs:
             print("  " + d)
