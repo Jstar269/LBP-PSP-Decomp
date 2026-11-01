@@ -124,7 +124,8 @@ class ReportTests(unittest.TestCase):
     def test_committed_report_is_current(self) -> None:
         figures = R.load_figures()
         rows = R.load_rows()
-        self.assertEqual(R.differences(figures, rows=rows), [], "the report differs from the figures and rows")
+        tus = R.read_units(R.ROOT / R.TU_REL)
+        self.assertEqual(R.differences(figures, rows=rows, tus=tus), [], "the report differs from the figures, rows and units")
         committed = json.loads(R.REPORT_PATH.read_text(encoding="utf-8"))
         self.assertEqual(R.unit_problems(committed), [])
         text = R.REPORT_PATH.read_text(encoding="utf-8")
