@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 24 192 192" width="192" height="192" role="img" aria-labelledby="t">
+  <title id="t">lbp-psp-decomp</title>
+  <circle cx="120" cy="120" r="96" fill="#8ED1FC"/>
+  <g fill="none" stroke="#0F2A44" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M66,45 C74,45 78,51 78,63 L78,102 C78,114 84,120 96,120 C84,120 78,126 78,138 L78,177 C78,189 74,195 66,195"/>
+    <path d="M174,45 C166,45 162,51 162,63 L162,102 C162,114 156,120 144,120 C156,120 162,126 162,138 L162,177 C162,189 166,195 174,195"/>
+  </g>
+  <g fill="#0F2A44">
+    <rect x="104" y="80" width="32" height="32" rx="4"/>
+    <rect x="104" y="128" width="32" height="32" rx="4"/>
+  </g>
+</svg>

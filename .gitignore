@@ -52,6 +52,6 @@ keys/
 /campaign/
 # Large analysis exports (analyzer TOML, Ghidra CSV): regenerated from your own disc.
 /analysis/
-# Function lists tools/lbpfuncs.py writes from your own disc (README "Setup"): never versioned publicly
+# Function lists tools/lbpfuncs.py writes from your own disc (docs/GUIDE.md "Setup"): never versioned publicly
 # (the maintainer's tree tracks its own copies; ignore rules do not affect tracked files).
 /data/functions-*.txt

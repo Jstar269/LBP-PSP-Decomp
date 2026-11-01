@@ -4,7 +4,7 @@ Contributions are welcome: matched functions, near misses with notes, compiler f
 This guide covers what you need, how a function is matched and checked, and what a pull request must contain. The
 method is hst-decomp's with the tool names changed; LBP-specific facts are in [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)
 (compiler profiles) and `data/modules.json` (modules). Contributions are licensed GPL-3.0-or-later like the project's
-own code (README, "Licensing"). By opening a pull request you confirm that you wrote the change (or name where it came
+own code (README, "License"). By opening a pull request you confirm that you wrote the change (or name where it came
 from) and that you may submit it under that licence.
 
 Read [AGENTS.md](AGENTS.md) too: its rules (game data never enters the repository; only EXACT counts) apply to every
@@ -33,7 +33,7 @@ change, by a person or an agent.
 Follow [Setup](docs/GUIDE.md#setup) in the project guide (or the README's short form), then check that one function
 builds and that your setup reproduces the published matches:
 
-```
+```text
 python tools/lbpconfig.py check
 python tools/lbpmatch.py src/eboot/<file>.c
 python tools/lbpmatch.py --all --parallel 4
@@ -98,7 +98,7 @@ address automatically. Every other name must be in `symbols/<module>.txt` (C++ r
 member names). If a match needs a new named symbol, verify its address in the disassembly, check with `grep` that the
 name is not already there, and **append** one line:
 
-```
+```text
 printf '%s\n' 'name = 0xADDR;   # <your source file>' >> symbols/<module>.txt
 ```
 
@@ -127,7 +127,7 @@ contiguous run (`start=` the first function, `end=` the last, `symbol=` the firs
 `<short_descriptive_name>_<addr8>.cpp` (or `.c`), where `<addr8>` is the start address in eight hex digits. Before
 installing, check that nobody covered the function already (a duplicate must be removed, keeping the reviewed one):
 
-```
+```text
 grep -l "start=0x<addr>" src/*/* wip/*
 ```
 
@@ -171,7 +171,7 @@ The owner reviews every source at the end, so aim for the code the developers wr
   member access instead of `*(int *)(p + 0x14)` when the layout is clear, `bool` and enums where obvious.
 - Avoid matching hacks: duplicated conditions, dummy locals or parameters that only steer register allocation,
   `volatile`, self-assignments, gratuitous casts or `goto`. When one of them is the **only** exact form you found,
-  keep it, but name it in the note line ("matching idiom: <what>"); `lbplint.py` counts those.
+  keep it, but name it in the note line (`matching idiom: <what>`); `lbplint.py` counts those.
 - Names: use a descriptive name only when the evidence supports it (strings, callers, documented research findings);
   otherwise keep the Ghidra address names. Never invent semantics.
 - Be consistent: one declaration per symbol across the tree (`lbplint.py` reports symbols declared with different
@@ -193,7 +193,7 @@ the evidence. Where LBP shares a compiler with Hot Shots Tennis, hst-decomp's ve
 
 ## Checks before you finish
 
-```
+```text
 python tools/lbpmatch.py <every file you added or changed>     # EXACT n/n
 python tools/lbplint.py --show header                          # none of your files listed
 python tools/lbpprcheck.py --base origin/main                  # what CI checks on your pull request

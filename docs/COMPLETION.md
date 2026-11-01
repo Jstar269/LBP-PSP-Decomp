@@ -52,12 +52,13 @@ denominator.
 | T3 | T2, and the shifted build passes (gate 5) |
 | T4 = strict | T3, and the source is reviewed (gate 7) |
 
-Current figures: T1 from `python tools/lbpcov.py --proofs` (the accepted ledger); T2 from `python tools/lbpbuild.py`
-(the whole-module build, docs/PLAN.md), counted only when the rebuilt file is byte-identical to the decrypted module.
-Measured 2026-10-28 (ledger journal 48, 5,095 proofs): `EBOOT.BIN` rebuilt with SHA-256 equal to retail; **T2 =
-427,216 B** produced from source (425,848 code, 1,368 data) = 10.456% of `EBOOT.BIN`'s 4,085,872 bytes, 10.449% of the
-strict scope (4,088,394 bytes, both modules); scaffolding (3,653,284 B) and the container (5,372 B) never count. Public
-build (published sources only): 393,372 code bytes = 13.752% of the public scope. T3 and T4: not measured (0).
+Current figures: the README's "Progress at a glance" and "Progress in detail", which `tools/lbppublish.py` generates
+from `data/public-figures.json` and dates by the newest accepted proof they count. T1 comes from the accepted ledger
+(`python tools/lbpcov.py --proofs`); T2 from `python tools/lbpbuild.py` (the whole-module build, docs/PLAN.md), counted
+only when the rebuilt file is byte-identical to the decrypted module and was built from the current ledger; scaffolding
+and the container never count. T3 and T4: not measured (0). The first byte-identical rebuild was measured 2026-10-28
+(ledger journal 48, 5,095 proofs): T2 = 427,216 B produced from source (425,848 code, 1,368 data), 10.449% of the
+strict scope (4,088,394 bytes, both modules).
 
 ## Milestones (capabilities on the way)
 

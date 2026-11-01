@@ -206,6 +206,43 @@ class PublishTests(unittest.TestCase):
             (tree / R.REPORT_REL).write_text(R.render(stale), encoding="utf-8")
             self.assertEqual(P.audit(tree), 1)                        # the report disagrees with the figures
 
+    def test_readme_blocks_are_made_from_the_figures_and_the_audit_checks_them(self) -> None:
+        inv = {"EBOOT.BIN": {0x1100: 0x1200, 0x1200: 0x1300, 0x6000: 0x6040}}
+        proofs = [{"module": "EBOOT.BIN", "start": "0x00001100", "end": "0x00001200", "source": "src/g.c",
+                   "status": "EXACT", "run": "20261101T082408Z-1"},
+                  {"module": "EBOOT.BIN", "start": "0x00001200", "end": "0x00001300", "source": "src/s.c",
+                   "status": "EXACT", "run": "20261102T000000Z-2"}]          # held back: its date does not count
+        figs = P.figures({"src/g.c"}, {"src/g.c": "game", "src/s.c": "sony-sdk"}, REGIONS, inv, proofs)
+        self.assertEqual(figs["EBOOT.BIN"]["ledger_date"], "2026-11-01")
+        b = P.render_blocks(figs)
+        self.assertIn("| **Code matched** (T1) | **100.0%** | 256 of the 256 code bytes", b["readme-glance"])
+        self.assertIn("| **Functions matched** (T1) | **100.0%** | 1 of the 1 functions", b["readme-glance"])
+        self.assertIn("| **Built from source** (T2) | not measured |", b["readme-glance"])
+        self.assertIn("Measured from the accepted proofs of 2026-11-01 with `python tools/lbppublish.py`.",
+                      b["readme-glance"])
+        self.assertIn("| `EBOOT.BIN` | 1 / 1 | 256 / 256 | 100.000 % |", b["readme-progress"])
+        page = "# T\n\n<!-- lbpfigures:begin readme-glance -->\n\nold\n\n<!-- lbpfigures:end -->\n\nAfter.\n"
+        filled = P.fill_blocks(page, b)
+        self.assertTrue(filled.endswith("<!-- lbpfigures:end -->\n\nAfter.\n"))
+        self.assertEqual(P.block_differences(filled, figs), ["README.md: block readme-progress is missing"])
+        filled += "\n<!-- lbpfigures:begin readme-progress -->\n\nx\n\n<!-- lbpfigures:end -->\n"
+        self.assertEqual(P.block_differences(P.fill_blocks(filled, b), figs), [])
+        self.assertEqual(P.block_differences(filled.replace("100.0%", "99.0%"), figs),
+                         ["README.md: block readme-glance differs from the figures",
+                          "README.md: block readme-progress differs from the figures"])
+        self.assertEqual(P.block_differences("no blocks\n", figs), [])      # a README without blocks is not checked
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            (tree / "data").mkdir()
+            (tree / "docs").mkdir()
+            (tree / "ORIGINS.json").write_text("{}", encoding="utf-8")
+            (tree / P.FIGURES).write_text(json.dumps(figs), encoding="utf-8")
+            (tree / R.REPORT_REL).write_text(R.render(R.build_report(figs)), encoding="utf-8")
+            (tree / "README.md").write_text(P.fill_blocks(filled, b), encoding="utf-8")
+            self.assertEqual(P.audit(tree), 0)
+            (tree / "README.md").write_text(filled, encoding="utf-8")
+            self.assertEqual(P.audit(tree), 1)                        # the README disagrees with the figures
+
     def test_the_report_files_are_published(self) -> None:
         tracked = ["tools/lbpreport.py", "tools/test_lbpreport.py", ".github/workflows/progress-report.yml",
                    ".recomp.json", "docs/objdiff-report.json"]

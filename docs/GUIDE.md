@@ -25,9 +25,13 @@ The tools run on a **Windows host and drive the compilers inside WSL** (they cal
    modules under `inputs/`; the maintainers' `decryptor` setting names theirs, which is not published.
 2. Describe your machine: `copy lbp-config.example.json lbp-config.json`, edit, then
    `python tools/lbpconfig.py check`. Every key can be overridden by `LBP_<KEY>`.
-3. Create the campaign directory from the decrypted modules (checks each against `data/modules.json`):
+3. Describe and check your module (its SHA-256 must equal `data/modules.json`), make the function list from it
+   (`data/functions-*.txt` is gitignored: it comes from your own disc), and create the campaign directory from the
+   decrypted modules (checks each against `data/modules.json`):
 
-   ```
+   ```text
+   python tools/lbpmodinfo.py inputs\...\EBOOT.BIN
+   python tools/lbpfuncs.py --elf inputs\...\EBOOT.BIN --out data/functions-EBOOT.BIN.txt
    python tools/lbpbootstrap.py --out campaign --module EBOOT.BIN=inputs\...\EBOOT.BIN [--module NAME=PATH ...]
    ```
 
@@ -36,7 +40,7 @@ The tools run on a **Windows host and drive the compilers inside WSL** (they cal
 
 ## Verify
 
-```
+```text
 python tools/lbpmatch.py --all --parallel 4     # rebuild and compare every source under src/
 python tools/lbpmatch.py src/eboot/<file>.c      # specific files
 ```
@@ -97,7 +101,7 @@ New here:
 | `lbpclone.py --refresh <exemplar>...` | Re-derive the existing clones of rewritten exemplars (EXACT only, in place); then `lbppromote.py promote` the replaced files. |
 | `lbppromote.py` | The promotion gate (hst-decomp's `hstpromote.py`, ported): the only writer of the accepted ledger. `lock`, `seed`, `promote [paths]`, `verify [--since REV]`, `migrate-toolchain --reason`, `retarget --reason`, `retract MODULE START --reason`. A proof comes only from a verification run in a fresh `build/proof/<run>/`: pre-checks (no `extra=`, a locked profile, whole functions of the locked inventory, lbpgate), `lbpmatch.py`, an independent re-compile that must give the matcher's object byte for byte (GCC's random-seed `_GLOBAL__I_` digits aside), and its own ELF reader's checks of the linked bytes against retail (code, placed `.rodata`/`.data`/`.sdata`, `.gnu.linkonce` objects, `.bss`/`.sbss` addresses, every linked symbol). One owner per byte; a promotion that would lose accepted bytes is refused. |
 | `lbpproof.py` | The accepted ledger and its locks (`data/target-manifest.json`, `data/toolchain-manifest.json`, `data/accepted-ledger.jsonl`, `data/accepted-journal.jsonl`): `status`, `check [--base REV] [--staged]`, `coverage`, `spans MODULE`. The toolchain lock records the profiles `src/` uses plus the primary, with SHA-256 of their kits (WSL and SNC), binutils, `include/` and the comparison code. `lbpcov.py --proofs` counts from it. |
-| `lbpbuild.py` | Whole-module build, tier T2 (design: `docs/PLAN.md`): every accepted source compiled by `lbpmatch.py` (object checked against its proof), reduced to its claimed code and compared data, linked in retail order at its retail address with retail-derived scaffolding for the rest (cut from your module at build time into `build/whole/`), the file assembled and compared by SHA-256; `report.json` and `provenance.json` (every byte: source or scaffolding). `--mode private|public|both`, `--reuse-match`, `--parallel 4`. T2 is reported only for a byte-identical image. |
+| `lbpbuild.py` | Whole-module build, tier T2 (design: `docs/PLAN.md`): every accepted source compiled by `lbpmatch.py` (object checked against its proof), reduced to its claimed code and compared data, linked in retail order at its retail address with retail-derived scaffolding for the rest (cut from your module at build time into `build/whole/`), the file assembled and compared by SHA-256; `report.json` and `provenance.json` (every byte: source or scaffolding). `--mode private\|public\|both`, `--reuse-match`, `--parallel 4`. T2 is reported only for a byte-identical image. |
 
 ## Never
 

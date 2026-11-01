@@ -21,7 +21,9 @@ Written in addition: ORIGINS.json (the classes of the copied sources only), the 
 AGENTS.md (PUBLIC_FILES, from docs/public/), data/public-figures.json (below) and docs/objdiff-report.json, which is
 a pure function of those figures (tools/lbpreport.py build_report: the objdiff report progress trackers read, counts
 and percentages only). The report is not tracked in this repository: it is made from the figures in the same run, and
---audit refuses a tree whose report differs from its figures. Nothing else is generated and no file is edited.
+--audit refuses a tree whose report differs from its figures. The figure blocks of the public README
+(`<!-- lbpfigures:begin NAME -->`, render_blocks) are filled from the same figures, dated by the newest accepted proof
+they count, and --audit refuses a README whose blocks disagree. Nothing else is generated and no file is edited.
 
 Public figures follow hst-decomp's rule (docs/COMPLETION.md): Sony code kept out of the public tree is not counted in
 the public denominator; it stays in the strict scope. Public scope = the game region and the libstdc++ region of
@@ -80,6 +82,7 @@ PUBLIC_FILES = {"docs/public/README.md": "README.md", "docs/public/AGENTS.md": "
 
 MANIFEST = "ORIGINS.json"
 FIGURES = "data/public-figures.json"
+RUN_DATE = re.compile(r"\d{8}T\d{6}Z")      # a proof's run id starts with its UTC time (tools/lbpproof.py)
 # machine paths of the maintainers' PCs and user names; the public repository URLs of the owner's projects
 # (github.com/Jstar269/..., the bytematch.dev page of the same name), the public copyright line ("Jstar269 and
 # contributors", as hst-decomp) and the maintainer's public handle in .recomp.json ("name": "Jstar269") are allowed
@@ -189,12 +192,15 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
     published_open = defaultdict(set)   # module -> starts covered by published open-source sources
     owned = defaultdict(dict)           # module -> {start: (end, source)} for proofs of published sources
     held = defaultdict(set)             # module -> starts whose matched source is held back as Sony code
+    run = defaultdict(dict)             # module -> {start: the proof's run id, "YYYYMMDDTHHMMSSZ-..."}
     for p in proofs:
         if p.get("status") == "EXACT" and classes.get(p.get("source")) in EXCLUDED_CLASSES:
             held[p["module"]].add(int(p["start"], 16))
         if p.get("source") in kept_sources and p.get("status") == "EXACT":
             s, e = int(p["start"], 16), int(p["end"], 16)
             owned[p["module"]][s] = (e, p["source"])
+            if RUN_DATE.match(str(p.get("run", ""))):
+                run[p["module"]][s] = p["run"]
             if classes.get(p["source"]) in ("newlib", "zlib", "libgcc"):
                 published_open[p["module"]].add(s)
     for module, inv in inventory.items():
@@ -205,6 +211,7 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
         scope_bytes = sum(inv[s] - s for s in scope)
         done = sum(min(e, inv[s]) - s for s, (e, _src) in owned[module].items() if s in scope)
         done_functions = sum(1 for s in owned[module] if s in scope)
+        runs = [run[module][s] for s in owned[module] if s in scope and run[module].get(s)]
         by_region = defaultdict(int)
         for s, e in inv.items():
             by_region[lbporigin.region_class(regions, module, s)] += e - s
@@ -217,7 +224,81 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
                        if scope_bytes else 0.0,
                        "strict_scope_bytes": total, "code_bytes_by_region_class": dict(sorted(by_region.items())),
                        "t2": t2, "t3": "not measured"}
+        if runs:    # the newest accepted proof the figures count: they change only when the ledger does
+            r = max(runs)
+            out[module]["ledger_date"] = f"{r[0:4]}-{r[4:6]}-{r[6:8]}"
     return out
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# generated figure blocks of the public README (docs/public/README.md): `<!-- lbpfigures:begin NAME -->` ...
+# `<!-- lbpfigures:end -->`. build() fills them from the figures it writes; --audit refuses a tree whose README blocks
+# differ from its data/public-figures.json. The layout follows hst-decomp's README (tools/hstprogress.py), so the two
+# projects show progress the same way.
+
+def render_blocks(figs: dict) -> dict[str, str]:
+    """{block name: text} for the public README, a pure function of the public figures."""
+    tot = {k: sum(f[k] for f in figs.values()) for k in ("public_scope_bytes", "public_scope_functions",
+                                                          "public_t1_bytes", "public_t1_functions")}
+    t2s = [f["t2"] for f in figs.values()]
+    t2 = sum(t["public_t2_bytes"] for t in t2s) if t2s and all(isinstance(t, dict) for t in t2s) else None
+    pct = lambda part, whole: 100.0 * part / whole if whole else 0.0      # noqa: E731
+    dates = sorted(f["ledger_date"] for f in figs.values() if f.get("ledger_date"))
+    measured = (f"Measured from the accepted proofs of {dates[-1]}" if dates else "Measured") \
+        + " with `python tools/lbppublish.py`"
+    built = (f"| **Built from source** (T2) | **{pct(t2, tot['public_scope_bytes']):.1f}%** | The share of that code "
+             "which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt "
+             "file is identical to the original. |") if t2 is not None else \
+        ("| **Built from source** (T2) | not measured | No whole-module build of the current accepted proofs yet "
+         "(`python tools/lbpbuild.py`). |")
+    glance = "\n".join([
+        "| | Progress | What it counts |",
+        "|---|---|---|",
+        f"| **Code matched** (T1) | **{pct(tot['public_t1_bytes'], tot['public_scope_bytes']):.1f}%** | "
+        f"{tot['public_t1_bytes']:,} of the {tot['public_scope_bytes']:,} code bytes of the public scope come from C or "
+        "C++ that compiles, function by function, to the game's exact bytes. |",
+        f"| **Functions matched** (T1) | **{pct(tot['public_t1_functions'], tot['public_scope_functions']):.1f}%** | "
+        f"{tot['public_t1_functions']:,} of the {tot['public_scope_functions']:,} functions of the public scope. |",
+        built,
+        "",
+        "Code and functions matched are the figures the trackers "
+        "([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. "
+        "The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links "
+        "is not published and not counted here, but stays in the project's strict finish line "
+        f"([`docs/COMPLETION.md`](docs/COMPLETION.md)). {measured}."])
+    rows = [f"| `{m}` | {f['public_t1_functions']:,} / {f['public_scope_functions']:,} | "
+            f"{f['public_t1_bytes']:,} / {f['public_scope_bytes']:,} | "
+            f"{pct(f['public_t1_bytes'], f['public_scope_bytes']):.3f} % |" for m, f in figs.items()]
+    t2_lines = [f"`{m}` built from source (T2): " + (
+        f"{f['t2']['public_t2_bytes']:,} code bytes of the public scope ({f['t2']['public_t2_percent']:.3f} %), and "
+        f"{f['t2']['public_t2_data_bytes']:,} data bytes; the rebuilt file is byte-identical to the original."
+        if isinstance(f["t2"], dict) else f"{f['t2']}.") for m, f in figs.items()]
+    detail = "\n".join([
+        f"**{tot['public_t1_functions']:,} functions** matched exactly in isolation (T1), {measured[0].lower()}"
+        f"{measured[1:]} and counted in code bytes of the public scope:",
+        "",
+        "| Module | Matched / functions | Matched / code bytes | Share of bytes |",
+        "|---|---|---|---|",
+        *rows,
+        "",
+        *t2_lines])
+    return {"readme-glance": glance, "readme-progress": detail}
+
+
+README_BLOCK = re.compile(r"<!-- lbpfigures:begin ([\w-]+) -->\n\n(.*?)\n\n<!-- lbpfigures:end -->", re.S)
+
+
+def fill_blocks(text: str, blocks: dict[str, str]) -> str:
+    """`text` with every lbpfigures block replaced by its rendering (a block with no rendering is left as it is)."""
+    return README_BLOCK.sub(lambda m: f"<!-- lbpfigures:begin {m.group(1)} -->\n\n{blocks.get(m.group(1), m.group(2))}"
+                                      "\n\n<!-- lbpfigures:end -->", text)
+
+
+def block_differences(text: str, figs: dict) -> list[str]:
+    want = render_blocks(figs)
+    have = {m.group(1): m.group(2) for m in README_BLOCK.finditer(text)}
+    return [f"README.md: block {name} " + ("is missing" if name not in have else "differs from the figures")
+            for name in want if have.get(name) != want[name]] if have else []
 
 
 def build(out: Path, list_all: bool) -> int:
@@ -256,6 +337,10 @@ def build(out: Path, list_all: bool) -> int:
                    t2_reports)
     (out / FIGURES).parent.mkdir(parents=True, exist_ok=True)
     (out / FIGURES).write_text(json.dumps(figs, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    readme = out / "README.md"
+    if readme.is_file():
+        readme.write_text(fill_blocks(readme.read_text(encoding="utf-8"), render_blocks(figs)), encoding="utf-8",
+                          newline="\n")
     (out / lbpreport.REPORT_REL).parent.mkdir(parents=True, exist_ok=True)
     (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs)), encoding="utf-8",
                                             newline="\n")
@@ -315,6 +400,9 @@ def audit(tree: Path) -> int:
         try:
             for d in lbpreport.differences(lbpreport.load_figures(tree / FIGURES), tree / lbpreport.REPORT_REL):
                 refusals.append(f"{lbpreport.REPORT_REL}: {d}")
+            if (tree / "README.md").is_file():
+                refusals += block_differences((tree / "README.md").read_text(encoding="utf-8"),
+                                              lbpreport.load_figures(tree / FIGURES))
         except (OSError, ValueError, KeyError) as exc:
             refusals.append(f"{lbpreport.REPORT_REL}: figures and report do not load ({exc!r})")
     for name in ("README.md", "LICENSE", "ORIGINS.json"):
