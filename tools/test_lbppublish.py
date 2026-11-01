@@ -264,5 +264,15 @@ class PublishTests(unittest.TestCase):
             P.git_lines("push")
 
 
+class ManifestTests(unittest.TestCase):
+    def test_recomp_manifest_names_no_game_file(self) -> None:
+        """recomp.fyi's bot refuses a manifest that names a game file (its rule 05), so .recomp.json never does."""
+        import re
+        text = (Path(__file__).resolve().parent.parent / ".recomp.json").read_text(encoding="utf-8")
+        doc = json.loads(text)
+        self.assertEqual(doc["wikidata"], "Q282548")              # LittleBigPlanet (2009), platform PSP
+        self.assertIsNone(re.search(r"EBOOT|\.(?:BIN|PRX|ISO|CSO|PBP|SFO)\b", text, re.IGNORECASE))
+
+
 if __name__ == "__main__":
     unittest.main()

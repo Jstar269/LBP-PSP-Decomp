@@ -1,6 +1,7 @@
 {
   "$schema": "https://recomp.fyi/schema/v1.json",
   "game": "LittleBigPlanet",
+  "wikidata": "Q282548",
   "system": "PSP",
   "type": "decomp",
   "original": {
@@ -46,5 +47,5 @@
     "tool fixes",
     "documentation"
   ],
-  "notes": "Work in progress on the game executable (EBOOT.BIN). The progress bar comes from the published objdiff report, which is generated from data/public-figures.json: the share of the public scope (the game's own code and the open-source libraries it links) that published sources reproduce byte for byte. Contains no game data, keys or decryption code; Sony SDK code the game links is not reconstructed here. You build and verify against your own copy of the game."
+  "notes": "Work in progress on the main game program. The progress bar comes from the published objdiff report, which is generated from data/public-figures.json: the share of the public scope (the game's own code and the open-source libraries it links) that published sources reproduce byte for byte. Contains no game data, keys or decryption code; Sony SDK code the game links is not reconstructed here. You build and verify against your own copy of the game."
 }
