@@ -92,7 +92,7 @@ class PublishTests(unittest.TestCase):
                 (root / t).write_text("x", encoding="utf-8")
             classes = {"src/eboot/g.c": "game", "src/eboot/s.c": "sony-sdk", "src/eboot/n.c": "newlib"}
             keep, excluded = P.plan(tracked, {"secret.json"}, classes, False, root)
-            self.assertEqual(keep, ["src/eboot/g.c", "src/eboot/n.c", "docs/GUIDE.md"])
+            self.assertEqual(keep, ["src/eboot/g.c", "src/eboot/n.c", "data/functions-EBOOT.BIN.txt", "docs/GUIDE.md"])
             self.assertEqual(excluded["origin class sony-sdk"], ["src/eboot/s.c"])
             self.assertEqual(excluded["source without an origin class"], ["src/eboot/x.c"])
             self.assertEqual(excluded["gitignored (tracked by force)"], ["secret.json"])
@@ -262,6 +262,21 @@ class PublishTests(unittest.TestCase):
     def test_the_tool_runs_git_ls_files_only(self) -> None:
         with self.assertRaises(AssertionError):
             P.git_lines("push")
+
+
+class FunctionListTests(unittest.TestCase):
+    def test_published_list_is_start_end_only(self) -> None:
+        private = "8804000 8804024 auto\n# a comment\n8804030 88040b4 stub\n"
+        got = P.public_function_list(private, "data/functions-EBOOT.BIN.txt")
+        self.assertEqual(got, "# start end (hex, end exclusive) of every function of EBOOT.BIN\n"
+                              "08804000 08804024\n08804030 088040b4\n")
+        self.assertEqual(P.public_function_list(got, "data/functions-EBOOT.BIN.txt"), got)   # a fixed point
+        self.assertNotIn("auto", got)
+        self.assertNotIn("stub", got)
+
+    def test_bootstrap_without_a_status_column_knows_no_stubs_of_a_non_elf(self) -> None:
+        import lbpbootstrap
+        self.assertEqual(lbpbootstrap.stub_ranges(b"not an executable"), [])
 
 
 class ManifestTests(unittest.TestCase):

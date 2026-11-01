@@ -46,6 +46,17 @@ def load_checked(path: Path, want_sha256: str, want_size: int) -> bytes | None:
     return None
 
 
+def stub_ranges(data: bytes) -> list[tuple[int, int]]:
+    """[lo, hi) of the executable's import stub section (.sceStub.text): generated from the import table, never
+    matched by a C source (tools/lbpfuncs.py marks the same functions `stub`). [] when the file is not such an ELF."""
+    import lbpfuncs
+    import lbpmodinfo as MI
+    try:
+        return [(lo, hi) for lo, hi, name in lbpfuncs.code_ranges(MI.Elf(data)) if name == ".sceStub.text"]
+    except Exception:       # noqa: BLE001 - any parse failure: no stubs known, every function stays "auto"
+        return []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True, help="campaign directory to create or update")
@@ -87,11 +98,17 @@ def main() -> int:
         functions = []
         ff = ROOT / mod["functions_file"]
         if ff.exists():
+            stubs = None
             for line in ff.read_text(encoding="utf-8").splitlines():
                 if line and not line.startswith("#"):
                     cols = line.split()
                     start, end = int(cols[0], 16), int(cols[1], 16)
-                    status = cols[2] if len(cols) > 2 else "reviewed"
+                    if len(cols) > 2:
+                        status = cols[2]
+                    else:
+                        # the published list has no status column: import stubs come from the executable itself
+                        stubs = stub_ranges(data) if stubs is None else stubs
+                        status = "stub" if any(lo <= start < hi for lo, hi in stubs) else "auto"
                     functions.append({"start": start, "end": end, "boundary_status": status})
         if len(functions) != mod.get("function_count", len(functions)):
             raise SystemExit(f"{mod['functions_file']}: {len(functions)} functions, expected {mod['function_count']}")

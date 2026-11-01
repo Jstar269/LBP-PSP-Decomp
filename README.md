@@ -39,7 +39,7 @@ the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), whic
 |---|---|---|
 | **Code matched** (T1) | **17.0%** | 486,116 of the 2,860,396 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
 | **Functions matched** (T1) | **40.3%** | 4,703 of the 11,671 functions of the public scope. |
-| **Built from source** (T2) | not measured | No whole-module build of the current accepted proofs yet (`python tools/lbpbuild.py`). |
+| **Built from source** (T2) | **17.0%** | The share of that code which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt file is identical to the original. |
 
 Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the accepted proofs of 2026-11-01 with `python tools/lbppublish.py`.
 
@@ -84,15 +84,17 @@ output of the game to web tools such as decomp.me, pastebins or public issues.
 |---|---|---|---|
 | `EBOOT.BIN` | 4,703 / 11,671 | 486,116 / 2,860,396 | 16.995 % |
 
-`EBOOT.BIN` built from source (T2): not measured (the build report is stale: the accepted ledger changed since the build).
+`EBOOT.BIN` built from source (T2): 486,116 code bytes of the public scope (16.995 %), and 1,264 data bytes; the rebuilt file is byte-identical to the original.
 
 <!-- lbpfigures:end -->
 
 Every source is re-verified with `python tools/lbpmatch.py` before it is published, and the figures count only the
 sources the promotion gate (`tools/lbppromote.py`) has accepted. Progress trackers (bytematch.dev, recomp.fyi, and the badges above) read
-[`docs/objdiff-report.json`](docs/objdiff-report.json), an objdiff report with the module totals (bytes and function
-counts) and no per-function detail, written in the same run as `data/public-figures.json` and from the same figures
-(`python tools/lbpreport.py --check` compares them). Public CI cannot build the project, so
+[`docs/objdiff-report.json`](docs/objdiff-report.json), an objdiff report written in the same run as
+`data/public-figures.json` and from the same figures: one unit per published source, and one "not yet recovered" unit
+for each function of the public scope that no source matches yet, so bytematch.dev draws a tile per function. The
+functions come from the published boundary list ([`data/functions-EBOOT.BIN.txt`](data/functions-EBOOT.BIN.txt)) and
+[`data/public-functions.txt`](data/public-functions.txt) (`python tools/lbpreport.py --check` compares them). Public CI cannot build the project, so
 [`progress-report.yml`](.github/workflows/progress-report.yml) uploads the committed file as the artifact
 `UCUS98744_report`.
 

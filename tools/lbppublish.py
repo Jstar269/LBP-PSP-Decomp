@@ -9,10 +9,12 @@ Copies every file git tracks (`git ls-files`) into --out, byte for byte, except 
   * sources (src/, wip/) whose origin class is in EXCLUDED_CLASSES (tools/lbporigin.py, computed fresh: Sony SDK
     libraries, Sony crt0, Sony system modules, cross-project copies of hst-decomp Sony SDK functions, code not
     attributed yet). Matched newlib, zlib, libgcc and GNU libstdc++ sources are open-source and stay;
-  * DISC_DERIVED files: tables made from the retail executable (function boundary lists, the compiler sample, the
-    target and toolchain manifests with retail digests and machine paths, the accepted ledger, which also names
-    excluded sources). A user regenerates the boundary lists from their own disc (tools/lbpfuncs.py). The symbol map
-    (symbols/, names at addresses) is published (owner decision 2026-10-28; set PUBLISH_SYMBOL_MAP);
+  * DISC_DERIVED files: tables made from the retail executable (the system module's function boundary list, the
+    compiler sample, the target and toolchain manifests with retail digests and machine paths, the accepted ledger,
+    which also names excluded sources). A user regenerates them from their own disc (tools/lbpfuncs.py). The symbol
+    map (symbols/, names at addresses) is published (owner decision 2026-10-28; set PUBLISH_SYMBOL_MAP), and so is the
+    game executable's function boundary list (FUNCTION_LISTS: start and end addresses only, which name each function
+    FUN_<address>; owner decision 2026-11-01, reversing the 2026-10-28 rule that kept it private);
   * PRIVATE_PATHS: maintainer-only files (state and hand-over notes with machine paths, the external-lane tooling
     and its notes, files that state this tree's private rules);
   * files git tracks although .gitignore ignores them (added by force).
@@ -69,8 +71,10 @@ ROOT = lbporigin.ROOT
 # unattributed gap stays out for now; mechanical translations are published as they are; the symbol map is published.
 EXCLUDED_CLASSES = ("startup", "sony-sdk", "sony-prx", "unattributed")
 PUBLISH_SYMBOL_MAP = True
-DISC_DERIVED = ("data/functions-EBOOT.BIN.txt", "data/functions-pspnet_ap_dialog_dummy.prx.txt",
-                "data/cceval-sample.json", "data/target-manifest.json", "data/toolchain-manifest.json",
+# Function boundary lists published (owner decision 2026-11-01, reversing 2026-10-28 for this list only): addresses
+# and sizes, never bytes or disassembly. A contribution never changes them (tools/lbpprcheck.py).
+FUNCTION_LISTS = ("data/functions-EBOOT.BIN.txt",)
+DISC_DERIVED = ("data/functions-pspnet_ap_dialog_dummy.prx.txt", "data/cceval-sample.json", "data/target-manifest.json", "data/toolchain-manifest.json",
                 "data/accepted-ledger.jsonl", "data/accepted-journal.jsonl")
 SYMBOL_MAPS = ("symbols/",)
 PRIVATE_PATHS = ("docs/HANDOFF.md", "docs/LANE-BRIEF.md", "docs/LANE-NOTES.md", "AGENTS.md",
@@ -148,6 +152,30 @@ def functions(root: Path, module: str) -> dict[int, int]:
     return {f["start"]: f["end"] for f in mod["functions"]} if mod else {}
 
 
+def public_function_list(text: str, path: str) -> str:
+    """The published form of a function boundary list, as hst-decomp publishes its own: a header line, then `start end`
+    in hex (end exclusive) per function. The maintainers' copy has a third column, the boundary status (tools/
+    lbpproject.py), which stays private: nothing public needs it, and the campaign bootstrap marks the import stubs from
+    the executable itself (tools/lbpbootstrap.py)."""
+    module = path.rsplit("/", 1)[-1][len("functions-"):-len(".txt")]
+    rows = []
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            s, e = line.split()[:2]
+            rows.append((int(s, 16), int(e, 16)))
+    return (f"# start end (hex, end exclusive) of every function of {module}\n"
+            + "".join(f"{s:08x} {e:08x}\n" for s, e in sorted(rows)))
+
+
+def header_symbol(source: str | None) -> str | None:
+    """The symbol a published source's LBPMATCH header names (None without a source)."""
+    if not source:
+        return None
+    import lbpmatch as M
+    return M.parse_header(ROOT / source)["symbol"]
+
+
 def overlap_bytes(ranges: list[tuple[int, int]], scope: list[tuple[int, int]]) -> int:
     """Bytes of `ranges` inside `scope` (both lists of [start, end); `scope` sorted and disjoint)."""
     starts = [a for a, _b in scope]
@@ -185,9 +213,12 @@ def public_t2(report: dict, kept_sources: set[str], scope: list[tuple[int, int]]
 
 
 def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inventory: dict[str, dict[int, int]],
-            proofs: list[dict], t2_reports: dict[str, dict | str] | None = None) -> dict:
+            proofs: list[dict], t2_reports: dict[str, dict | str] | None = None,
+            rows_out: dict[str, list[tuple]] | None = None) -> dict:
     """Public T1 figures (see the module docstring) per module, from the inventory and the accepted proofs, and T2 from
-    `t2_reports` ({module: public build report, or the reason there is none}; tools/lbpbuild.py load_report)."""
+    `t2_reports` ({module: public build report, or the reason there is none}; tools/lbpbuild.py load_report).
+    `rows_out`, when given, receives the public scope's functions behind those figures, {module: [(start, size,
+    matched bytes, source or None, None)]} (tools/lbpreport.py: data/public-functions.txt, the report's units)."""
     out = {}
     published_open = defaultdict(set)   # module -> starts covered by published open-source sources
     owned = defaultdict(dict)           # module -> {start: (end, source)} for proofs of published sources
@@ -211,6 +242,9 @@ def figures(kept_sources: set[str], classes: dict[str, str], regions: dict, inve
         scope_bytes = sum(inv[s] - s for s in scope)
         done = sum(min(e, inv[s]) - s for s, (e, _src) in owned[module].items() if s in scope)
         done_functions = sum(1 for s in owned[module] if s in scope)
+        if rows_out is not None:
+            rows_out[module] = [(s, inv[s] - s, min(owned[module][s][0], inv[s]) - s, owned[module][s][1], None)
+                                if s in owned[module] else (s, inv[s] - s, 0, None, None) for s in sorted(scope)]
         runs = [run[module][s] for s in owned[module] if s in scope and run[module].get(s)]
         by_region = defaultdict(int)
         for s, e in inv.items():
@@ -318,7 +352,11 @@ def build(out: Path, list_all: bool) -> int:
     for path in keep:
         dest = out / path
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / path, dest)
+        if path in FUNCTION_LISTS:
+            dest.write_text(public_function_list((ROOT / path).read_text(encoding="utf-8"), path), encoding="utf-8",
+                            newline="\n")
+        else:
+            shutil.copyfile(ROOT / path, dest)
         copied += dest.stat().st_size
     kept_set = set(keep)
     kept_classes = {p: c for p, c in classes.items() if p in kept_set}
@@ -333,8 +371,11 @@ def build(out: Path, list_all: bool) -> int:
     proofs = [json.loads(ln) for ln in ledger.read_text(encoding="utf-8").splitlines()[1:]] if ledger.exists() else []
     import lbpbuild
     t2_reports = {m: lbpbuild.load_report(m, "public") for m, i in inventory.items() if i}
+    rows: dict[str, list[tuple]] = {}
     figs = figures({p for p in kept_classes}, classes, regions, {m: i for m, i in inventory.items() if i}, proofs,
-                   t2_reports)
+                   t2_reports, rows)
+    rows = {m: [(s, n, d, src, header_symbol(src)) for s, n, d, src, _ in rs] for m, rs in rows.items()}
+    (out / lbpreport.ROWS_REL).write_text(lbpreport.render_rows(rows), encoding="utf-8", newline="\n")
     (out / FIGURES).parent.mkdir(parents=True, exist_ok=True)
     (out / FIGURES).write_text(json.dumps(figs, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     readme = out / "README.md"
@@ -342,7 +383,7 @@ def build(out: Path, list_all: bool) -> int:
         readme.write_text(fill_blocks(readme.read_text(encoding="utf-8"), render_blocks(figs)), encoding="utf-8",
                           newline="\n")
     (out / lbpreport.REPORT_REL).parent.mkdir(parents=True, exist_ok=True)
-    (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs)), encoding="utf-8",
+    (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs, rows)), encoding="utf-8",
                                             newline="\n")
     print(f"public tree: {out}")
     print(f"tracked files: {len(tracked)}; copied: {len(keep)} ({copied} bytes); "
@@ -396,9 +437,16 @@ def audit(tree: Path) -> int:
                 notes[f"cross-project clones of hst-decomp sources, published as {cls}"].append(rel)
         elif rel.endswith(".md") and DISASM_LINE.search(text):
             notes["docs with disassembly-like lines"].append(rel)
+    for path in FUNCTION_LISTS:
+        if (tree / path).is_file():
+            text = (tree / path).read_text(encoding="utf-8")
+            if text != public_function_list(text, path):
+                refusals.append(f"{path}: not in the published form (`start end` per line; the status column stays "
+                                "private)")
     if (tree / FIGURES).exists() or (tree / lbpreport.REPORT_REL).exists():
         try:
-            for d in lbpreport.differences(lbpreport.load_figures(tree / FIGURES), tree / lbpreport.REPORT_REL):
+            for d in lbpreport.differences(lbpreport.load_figures(tree / FIGURES), tree / lbpreport.REPORT_REL,
+                                           lbpreport.load_rows(tree / lbpreport.ROWS_REL)):
                 refusals.append(f"{lbpreport.REPORT_REL}: {d}")
             if (tree / "README.md").is_file():
                 refusals += block_differences((tree / "README.md").read_text(encoding="utf-8"),

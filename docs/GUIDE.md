@@ -25,13 +25,14 @@ The tools run on a **Windows host and drive the compilers inside WSL** (they cal
    modules under `inputs/`; the maintainers' `decryptor` setting names theirs, which is not published.
 2. Describe your machine: `copy lbp-config.example.json lbp-config.json`, edit, then
    `python tools/lbpconfig.py check`. Every key can be overridden by `LBP_<KEY>`.
-3. Describe and check your module (its SHA-256 must equal `data/modules.json`), make the function list from it
-   (`data/functions-*.txt` is gitignored: it comes from your own disc), and create the campaign directory from the
-   decrypted modules (checks each against `data/modules.json`):
+3. Describe and check your module (its SHA-256 must equal `data/modules.json`), use the published function list
+   (`data/functions-EBOOT.BIN.txt`, `start end` per function; do not regenerate it: `lbpbootstrap.py` marks the
+   import stubs from your executable), make a list for any other module with `lbpfuncs.py` (it stays local and
+   gitignored), and create the campaign directory from the decrypted modules (checks each against
+   `data/modules.json`):
 
    ```text
    python tools/lbpmodinfo.py inputs\...\EBOOT.BIN
-   python tools/lbpfuncs.py --elf inputs\...\EBOOT.BIN --out data/functions-EBOOT.BIN.txt
    python tools/lbpbootstrap.py --out campaign --module EBOOT.BIN=inputs\...\EBOOT.BIN [--module NAME=PATH ...]
    ```
 
@@ -92,8 +93,8 @@ New here:
 | `lbpbounds.py` | Agreement of boundary lists from other tools (Nakagawa `analyze.py` TOML, a Ghidra CSV). |
 | `lbptoolchain.py` | Compiler fingerprints per module or address range (move/li encodings, branch-likely rate, prologue order, movz/movn). |
 | `lbpxclone.py` | Cross-project clones: hst-decomp exact sources reused for byte-identical (up to addresses) LBP functions, verified by `lbpmatch.py`. |
-| `lbppublish.py` | The would-be public tree (`--out`): tracked files minus Sony SDK / startup / unattributed sources (`lbporigin.py` classes from `data/origin-regions.json` and notes), disc-derived tables, the symbol map and maintainer files; `--audit` checks a tree (including that its objdiff report agrees with its figures); writes `data/public-figures.json` (bytes and function counts) and, from the same figures, `docs/objdiff-report.json`. Never touches a remote. |
-| `lbpreport.py` | The objdiff progress report for bytematch.dev and recomp.fyi: `build_report` (used by `lbppublish.py`), and `--tree <public tree> [--check]` to write or compare a tree's report. Counts and percentages only. |
+| `lbppublish.py` | The would-be public tree (`--out`): tracked files minus Sony SDK / startup / unattributed sources (`lbporigin.py` classes from `data/origin-regions.json` and notes), disc-derived tables, the symbol map and maintainer files; `--audit` checks a tree (including that its objdiff report agrees with its figures); writes `data/public-figures.json` (bytes and function counts), `data/public-functions.txt` (the public scope's functions behind them) and, from those, `docs/objdiff-report.json`. Never touches a remote. |
+| `lbpreport.py` | The objdiff progress report for bytematch.dev and recomp.fyi: `build_report` (used by `lbppublish.py`), and `--tree <public tree> [--check]` to write or compare a tree's report. One unit per published source and one `EBOOT.BIN/not-yet-recovered/FUN_<address>` unit per unmatched function of the public scope: names, addresses, sizes and source paths the tree already publishes, never game bytes. |
 | `lbpqueue.py` | Batches for matching agents (`try/agent-queue/<name>-NN.json`): `--kind families` (one representative per unmatched clone family), `near` (lbpgen candidates within 35% of the words, wip leads), `singles`, `library`; flags `ins_zero_low`/`vfpu`; skips what earlier batches and lanes reserved or attempted. |
 | `lbplane.py` | Maintainers only (not in the public tree): external agent lanes (`rewrite-harvest <lane>` takes a readability lane's rewrites of existing sources through the matcher and the gate, then refreshes their clones): `make <lane> <batch>` (isolated copy under `ext_root`, own build/), `harvest <lane>` (gate, main-tree re-verification, install EXACT only, re-proof with the committed symbols, then the promotion gate; wip/notes), `status`. Lane agents follow `docs/LANE-BRIEF.md`; their findings arrive in `docs/LANE-NOTES.md`. |
 | `lbpreadable.py` | Readability score of the publishable sources (Ghidra-style names, `undefined` types, offset casts, the pasted typedef block); `lbpqueue.py --kind readability` ranks by it times (1 + clones). Rules for a pass: `docs/READABILITY-BRIEF.md`. |

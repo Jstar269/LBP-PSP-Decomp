@@ -9,8 +9,11 @@ adds or changes:
   binary          a binary file (git sees it as binary, or it holds a NUL byte), or a name the ignore rules keep
                   out for that reason (retail modules, objects, images of discs, archives, compilers, key files)
   place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json,
-                  the disc-derived files tools/lbppublish.py keeps private (data/functions-*.txt and the rest)
-  size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big)
+                  the disc-derived files tools/lbppublish.py keeps private (DISC_DERIVED); also a change to the
+                  published function boundary list (FUNCTION_LISTS: the maintainers decide boundaries)
+  size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big); the
+                  generated objdiff report (docs/objdiff-report.json, one unit per function) has a 32 MiB limit
+  report          that report when its units do not add up to its module figures (tools/lbpreport.py unit_problems)
   private         an added line with a personal or secret value: a home directory path (C:\\Users\\..., /home/...,
                   /mnt/c/Users/...), a private key block, a GitHub, OpenAI or AWS token
   dump            an added file with more than 16 lines that look like a disassembly listing (an address, an
@@ -44,6 +47,10 @@ import lbppublish
 MATCH = "LBPMATCH"
 CONFIG = "lbp-config.json"
 MAX_BYTES = 1 << 20
+# The objdiff progress report (tools/lbpreport.py) lists every function of the public scope, one unit per line, so it is
+# several MiB. It has its own limit, and it must still add up: its units, to the module figures.
+OBJDIFF_REPORT = "docs/objdiff-report.json"
+REPORT_MAX_BYTES = 32 << 20
 BINARY_SUFFIXES = {".o", ".obj", ".elf", ".bin", ".prx", ".pbp", ".iso", ".cso", ".exe", ".dll", ".so", ".a", ".zip",
                    ".7z", ".gz", ".tar", ".gzf", ".rep", ".img", ".dat", ".sfo", ".at3", ".pmf"}
 NEVER = (re.compile(r"^(build|try|keys|inputs|campaign|analysis)/"), re.compile(r"^ghidra/(projects|out|cache|settings)/"),
@@ -83,6 +90,17 @@ def removed_lines(repo: Path, base: str, path: str) -> list[str]:
     return [l[1:] for l in out.splitlines() if l.startswith("-") and not l.startswith("---")]
 
 
+def report_problems(data: bytes) -> list[str]:
+    """Why an objdiff report is not one tools/lbpreport.py writes ([] when its units add up to its modules)."""
+    import json
+
+    import lbpreport
+    try:
+        return lbpreport.unit_problems(json.loads(data.decode("utf-8")))
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [f"not an objdiff report tools/lbpreport.py writes ({type(exc).__name__})"]
+
+
 def check(repo: Path, base: str) -> list[str]:
     refusals: list[str] = []
     binaries = binary_paths(repo, base)
@@ -94,8 +112,19 @@ def check(repo: Path, base: str) -> list[str]:
         if any(p.search(path) for p in NEVER) or path in lbppublish.DISC_DERIVED:
             refusals.append(f"place    {path}: this path is never versioned")
             continue
+        if path in lbppublish.FUNCTION_LISTS:
+            refusals.append(f"place    {path}: the function boundary list is the maintainers' (a list you make "
+                            "from your own disc stays local)")
+            continue
         data = file.read_bytes() if file.is_file() else b""
-        if len(data) > MAX_BYTES:
+        if path == OBJDIFF_REPORT:
+            if len(data) > REPORT_MAX_BYTES:
+                refusals.append(f"size     {path}: {len(data):,} bytes (limit {REPORT_MAX_BYTES:,})")
+                continue
+            problems = report_problems(data)
+            if problems:
+                refusals.append(f"report   {path}: {problems[0]}")
+        elif len(data) > MAX_BYTES:
             refusals.append(f"size     {path}: {len(data):,} bytes (limit {MAX_BYTES:,})")
             continue
         if b"\0" in data:

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Tests for the public objdiff report (lbpreport.py): it is a pure function of the published figures (bytes and
-function counts, tier T1) and holds no per-function or game-derived detail. No WSL, no retail bytes. The tests on the
-files of a tree (data/public-figures.json, docs/objdiff-report.json) run where the tree has them (the public
-repository); in the private repository lbppublish.py writes them into a built tree and its tests cover that."""
+function counts, tier T1) and the public scope's rows (data/public-functions.txt), and holds no game bytes. No WSL, no
+retail bytes. The tests on the files of a tree (data/public-figures.json, data/public-functions.txt,
+docs/objdiff-report.json) run where the tree has them (the public repository); in the private repository
+lbppublish.py writes them into a built tree and its tests cover that."""
 from __future__ import annotations
 
 import json
@@ -122,13 +123,85 @@ class ReportTests(unittest.TestCase):
     @unittest.skipUnless(HAVE_TREE, "this tree has no data/public-figures.json and docs/objdiff-report.json")
     def test_committed_report_is_current(self) -> None:
         figures = R.load_figures()
-        self.assertEqual(R.differences(figures), [], "the report differs from the figures")
+        rows = R.load_rows()
+        self.assertEqual(R.differences(figures, rows=rows), [], "the report differs from the figures and rows")
         committed = json.loads(R.REPORT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(len(committed["units"]), len(figures))
-        for key, value in scalars(committed):
-            self.assertIn(key, KEYS)
-            if isinstance(value, str):
-                self.assertTrue(value in figures or value.isdigit(), f"unexpected string {value!r}")
+        self.assertEqual(R.unit_problems(committed), [])
+        text = R.REPORT_PATH.read_text(encoding="utf-8")
+        for pattern in (r"[\\]", r"sha256", r"C:", r"/nk/"):
+            self.assertIsNone(re.search(pattern, text), pattern)
+
+
+# rows of a module M.BIN: two published sources and two functions no source matches yet
+ROWS = {"M.BIN": [(0x100, 0x20, 0x20, "src/m/a.c", "do_a"), (0x120, 0x8, 0, None, None),
+                  (0x128, 0x10, 0x10, "src/m/b.cpp", "FUN_00000128"), (0x138, 0x8, 0, None, None)]}
+SMALL = {"M.BIN": {"public_scope_bytes": 0x40, "public_t1_bytes": 0x30, "public_t1_percent": 75.0,
+                   "public_scope_functions": 4, "public_t1_functions": 2, "t2": "x", "t3": "x"}}
+
+
+class UnitTests(unittest.TestCase):
+    """The per-unit report: what bytematch.dev draws as its grid."""
+
+    def test_units_in_address_order_with_names_that_say_what_they_are(self) -> None:
+        rep = R.build_report(SMALL, ROWS)
+        self.assertEqual([u["name"] for u in rep["units"]],
+                         ["src/m/a.c", "M.BIN/not-yet-recovered/FUN_00000120", "src/m/b.cpp",
+                          "M.BIN/not-yet-recovered/FUN_00000138"])
+        a = rep["units"][0]
+        self.assertEqual(a["metadata"], {"complete": False, "module_name": "M.BIN", "source_path": "src/m/a.c",
+                                         "progress_categories": ["M.BIN"]})
+        self.assertEqual(a["functions"], [{"name": "do_a", "size": "32", "fuzzy_match_percent": 100.0,
+                                           "metadata": {"virtual_address": "256"}, "address": "256"}])
+        gap = rep["units"][1]
+        self.assertEqual(gap["measures"], {"total_code": "8", "total_functions": 1})
+        self.assertTrue(gap["metadata"]["auto_generated"])
+
+    def test_module_figures_are_unchanged_by_the_rows(self) -> None:
+        with_rows, without = R.build_report(SMALL, ROWS), R.build_report(SMALL)
+        strip = lambda m: {k: v for k, v in m.items() if k != "total_units"}      # noqa: E731
+        self.assertEqual(strip(with_rows["measures"]), strip(without["measures"]))
+        self.assertEqual(with_rows["measures"]["total_units"], 4)
+        self.assertEqual(R.unit_problems(with_rows), [])
+
+    def test_rows_that_disagree_with_the_figures_are_refused(self) -> None:
+        bad = {"M.BIN": ROWS["M.BIN"][:-1]}
+        with self.assertRaises(ValueError):
+            R.build_report(SMALL, bad)
+
+    def test_rows_file_round_trips(self) -> None:
+        self.assertEqual(R.parse_rows(R.render_rows(ROWS)), ROWS)
+
+    def test_render_is_one_unit_per_line(self) -> None:
+        rep = R.build_report(SMALL, ROWS)
+        text = R.render(rep)
+        self.assertEqual(json.loads(text), rep)
+        self.assertEqual(sum(1 for line in text.split("\n") if line.startswith('{"name":')), 4)
+
+    def test_unit_problems_find_a_report_that_does_not_add_up(self) -> None:
+        rep = R.build_report(SMALL, ROWS)
+        rep["units"].pop()
+        self.assertTrue(R.unit_problems(rep))
+
+    def test_the_pr_checker_reads_the_report(self) -> None:
+        import lbpprcheck
+        self.assertEqual(lbpprcheck.report_problems(R.render(R.build_report(SMALL, ROWS)).encode()), [])
+        self.assertTrue(lbpprcheck.report_problems(b"[]"))
+
+    def test_cli_uses_the_rows_of_a_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = Path(tmp)
+            (tree / "data").mkdir()
+            (tree / R.FIGURES_REL).write_text(json.dumps(SMALL), encoding="utf-8")
+            (tree / R.ROWS_REL).write_text(R.render_rows(ROWS), encoding="utf-8")
+            argv = sys.argv
+            try:
+                sys.argv = ["lbpreport.py", "--tree", str(tree)]
+                self.assertEqual(R.main(), 0)
+                sys.argv = ["lbpreport.py", "--tree", str(tree), "--check"]
+                self.assertEqual(R.main(), 0)
+            finally:
+                sys.argv = argv
+            self.assertEqual(json.loads((tree / R.REPORT_REL).read_text(encoding="utf-8"))["measures"]["total_units"], 4)
 
 
 if __name__ == "__main__":

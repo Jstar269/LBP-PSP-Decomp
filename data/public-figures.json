@@ -15,7 +15,16 @@
   "public_t1_functions": 4703,
   "public_t1_percent": 16.995,
   "strict_scope_bytes": 3827976,
-  "t2": "not measured (the build report is stale: the accepted ledger changed since the build)",
+  "t2": {
+   "image_bytes": 4085872,
+   "image_identical": true,
+   "image_t2_bytes": 487380,
+   "image_t2_percent": 11.928,
+   "method": "tools/lbpbuild.py public build: bytes the compiled objects of published accepted sources produce in the whole-module image, which is byte-identical to the retail module; scaffolding never counts",
+   "public_t2_bytes": 486116,
+   "public_t2_data_bytes": 1264,
+   "public_t2_percent": 16.995
+  },
   "t3": "not measured"
  }
 }

@@ -53,5 +53,7 @@ keys/
 # Large analysis exports (analyzer TOML, Ghidra CSV): regenerated from your own disc.
 /analysis/
 # Function lists tools/lbpfuncs.py writes from your own disc (docs/GUIDE.md "Setup"): never versioned publicly
-# (the maintainer's tree tracks its own copies; ignore rules do not affect tracked files).
+# (the maintainer's tree tracks its own copies; ignore rules do not affect tracked files). The game executable's list
+# is published (owner decision 2026-11-01): a contribution never changes it (tools/lbpprcheck.py).
 /data/functions-*.txt
+!/data/functions-EBOOT.BIN.txt
