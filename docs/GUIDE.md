@@ -60,7 +60,8 @@ Statuses are hst-decomp's: `EXACT`, `MISMATCH`, `COMPILE_FAILED`, `LINK_FAILED`,
 ```
 
 `module`, `start`, `end`, `symbol` are required; `lang=c99|c++`; `cc=` selects the compiler profile (absent =
-`mwcc219`, mwccpsp 3.0.1 build 219 `-c -O4,p -sdatathreshold 0`; `gcc131-*`/`gcc171-*` the Sony psp-gcc kits);
+`gcc404xs-Os`, the primary profile: GCC 4.0.4 with the pspdev Allegrex patch and this project's measured changes; the
+others are `gcc404xs-O0`...`-O3`, the other GCC 4.x builds of `toolchain/gcc4/` (`gcc410-*`, `gcc402x-*`, `gcc402t-*`, `gcc402h-*`, `gcc404x-*`, `gcc404xi-Os`, and the unpatched `gcc402-*`, `gcc432-*`), the decomp.me psp-gcc kits (`gcc131-*`, `gcc171-*`, with `x` after the version for Allegrex `ext`/`ins`), SNC (below) and Metrowerks `mwcc219`, mwccpsp 3.0.1 build 219 `-c -O4,p -sdatathreshold 0`);
 `asm=vfpu` allows VFPU-only inline asm under the project rule in AGENTS.md (with an `Original inline VFPU asm:` reason line); `cc=snc127-O<n>` selects SN Systems SNC (pspsnc 1.2.7503, run natively);
 `rodata=`, `data=`, `sdata=`, `bss=`, `sbss=` place the object's sections; `helpers=` places same-file static
 helpers. Which profile LBP's game code needs is recorded in [TOOLCHAIN.md](TOOLCHAIN.md).

@@ -41,7 +41,7 @@ the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), whic
 | **Functions matched** (T1) | **40.2%** | 4,703 of the 11,693 functions of the public scope. |
 | **Built from source** (T2) | **17.0%** | The share of that code which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt file is identical to the original. |
 
-Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the accepted proofs of 2026-11-01 with `python tools/lbppublish.py`.
+Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-01 by `tools/lbppublish.py`, which needs that ledger.
 
 <!-- lbpfigures:end -->
 
@@ -62,8 +62,9 @@ machine:
    own machine into `inputs/` (gitignored) with a tool of your choice, for example Nakagawa Recomp's `nk_decrypt`
    ([how to run it](https://github.com/Jstar269/nakagawa-recomp/blob/main/docs/SETUP.md#encrypted-executables));
    this repository contains no decryption code. Its SHA-256 must equal the one in `data/modules.json`.
-2. Install the compilers in WSL (`toolchain/gcc4/` builds GCC 4.0.4 with the pspdev Allegrex patch and this
-   project's measured Allegrex changes) and set up the campaign directory: [Setup](docs/GUIDE.md#setup).
+2. Install the compilers in WSL (`toolchain/gcc4/` builds the GCC 4.0.4, 4.0.2 and 4.1.0 compilers the sources use,
+   with the pspdev Allegrex patch and this project's measured Allegrex changes; the decomp.me kits add psp-gcc 1.7.1
+   and SNC) and set up the campaign directory: [Setup](docs/GUIDE.md#setup).
 3. Run `python tools/lbpmatch.py --all --parallel 4`.
 
 **Where does a fix belong?** If the game misbehaves in the recompiled player, the cause is usually general: a missing
@@ -79,7 +80,7 @@ output of the game to web tools such as decomp.me, pastebins or public issues.
 
 <!-- lbpfigures:begin readme-progress -->
 
-**4,703 functions** matched exactly in isolation (T1), measured from the accepted proofs of 2026-11-01 with `python tools/lbppublish.py` and counted in code bytes of the public scope:
+**4,703 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-01 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
 
 | Module | Matched / functions | Matched / code bytes | Share of bytes |
 |---|---|---|---|

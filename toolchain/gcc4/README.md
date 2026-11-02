@@ -7,8 +7,8 @@ binaries. Run everything inside Linux (WSL Ubuntu 24.04 is what the recorded bui
 
 | Build | Made from | Used by profiles (`cc=` in `src/`, counts at commit time) |
 | --- | --- | --- |
-| `psp-gcc-4.0.4x` | GCC 4.0.4 + pspdev patch 65aaa94632 + all four project changes | `gcc404xs-Os` (**PRIMARY**, 1,015 sources), `gcc404xs-O2` (147) |
-| `psp-gcc-4.0.2x` | GCC 4.0.2 + pspdev patch 65aaa94632 + the three tuning changes (no ins-from-zero) | `gcc402x-Os` (989), `gcc402x-O2` (148), `gcc402x-O1` (104) |
+| `psp-gcc-4.0.4x` | GCC 4.0.4 + pspdev patch 65aaa94632 + all four project changes | `gcc404xs-Os` (**PRIMARY**, 1,784 sources), `gcc404xs-O2` (319) |
+| `psp-gcc-4.0.2x` | GCC 4.0.2 + pspdev patch 65aaa94632 + the three tuning changes (no ins-from-zero) | `gcc402x-Os` (989), `gcc402x-O2` (151), `gcc402x-O1` (104) |
 | `psp-gcc-4.0.2h` | GCC 4.0.2 + pspdev patch 65aaa94632, unchanged | `gcc402t-Os` (56), `gcc402t-O2` (10) (with `-mtune=r4000`) |
 | `psp-gcc-4.1.0s` | GCC 4.1.0 + pspdev `gcc-4.1.0-PSP.patch` (7be303fec4), unchanged | `gcc410-Os` (1,975) |
 | `psp-gcc-4.0.4h` | GCC 4.0.4 + pspdev patch 65aaa94632, unchanged | none: the base the 4.0.4x build is made from |
@@ -16,7 +16,7 @@ binaries. Run everything inside Linux (WSL Ubuntu 24.04 is what the recorded bui
 All are configured `--target=psp` (the pspdev patches' `mipsallegrexel-psp-elf`), C and C++, and assemble with the
 Sony binutils 2.14 assembler (below). The profiles add `-G0 -fno-merge-constants -mpreferred-stack-boundary=4` and
 more (`tools/lbpmatch.py` `gcc_profiles()`, `data/toolchain-manifest.json`). The decomp.me kits behind `gcc171-*`
-and SNC behind `snc127-*` are not built here.
+and SNC behind `snc127-*` are not built here (576 and 9 sources).
 
 ## The project's changes (`patches/`)
 

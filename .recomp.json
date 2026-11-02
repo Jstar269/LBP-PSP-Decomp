@@ -12,7 +12,8 @@
   "project": "lbp-psp-decomp",
   "status": "in-progress",
   "toolchain": [
-    "GCC 4.0.4 (pspdev Allegrex patch)",
+    "GCC 4.0.4, 4.1.0 and 4.0.2 (pspdev Allegrex patch; GCC 4.0.4 and 4.0.2 with this project's measured Allegrex changes)",
+    "psp-gcc 1.7.1 and SN Systems SNC 1.2.7503 (decomp.me PSP compiler kits)",
     "binutils 2.14 assembler (decomp.me PSP compiler kits)"
   ],
   "approach": "Strict matching decompilation: a function counts only when its compiled and linked bytes equal the original exactly, with nothing masked.",

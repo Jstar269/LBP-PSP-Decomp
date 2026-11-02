@@ -31,6 +31,7 @@ Usage: lbpmatch.py [paths...]   (default: every source under src/)
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -39,7 +40,13 @@ import shlex
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -536,16 +543,100 @@ def compare_placed(h: dict, out: Path, data: bytes, seg: dict, placement: list, 
     return "EXACT", "", 0
 
 
+WSL_NOT_ANSWERING = "Wsl/Service/0x8007274c"     # "connection attempt failed": the service did not answer
+WSL_CONNECT_ATTEMPTS = 3
+WSL_FAILURE = re.compile(r"Wsl/[A-Za-z]+/(?:[A-Za-z]+/)?0x[0-9A-Fa-f]+|The Windows Subsystem for Linux instance has terminated")
+
+
+class ToolFailure(RuntimeError):
+    """The machinery under the matcher failed (wsl.exe did not answer): no source was measured. This is not a
+    result about any source, so it is never turned into a per-source status."""
+
+
 def run_wsl(lines: list[str], name: str, native: str | None = None) -> int:
     # Per-process script names, so independent runs (on different sources) can overlap. `native` is exported
-    # as $N for the MWCC command lines. Returns the script's exit status.
+    # as $N for the MWCC command lines. Returns the script's exit status; a wsl.exe failure raises ToolFailure.
     script = ROOT / "build" / f"{name}.{os.getpid()}.sh"
     prologue = ["#!/bin/sh"] + (["export N=" + native] if native else [])
+    script.parent.mkdir(parents=True, exist_ok=True)
     script.write_text("\n".join(prologue + lines) + "\n", encoding="utf-8", newline="\n")
     try:
-        return subprocess.run(["wsl.exe", "-e", "sh", to_wsl(script)], check=False).returncode
+        for attempt in range(WSL_CONNECT_ATTEMPTS):
+            done = subprocess.run(["wsl.exe", "-e", "sh", to_wsl(script)], check=False,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            # wsl.exe's own errors (service timeout, instance terminated) are UTF-16 text on its output; the compiler's
+            # diagnostics go to the per-source logs, so what comes back here is wsl.exe's (and objcopy's, link step)
+            err = done.stdout or b""
+            text = err.decode("utf-16-le", errors="replace") if b"\0" in err[:8] else err.decode("utf-8", errors="replace")
+            if text.strip():
+                sys.stderr.write(text if text.endswith("\n") else text + "\n")
+            if not (done.returncode in (-1, 0xFFFFFFFF) or WSL_FAILURE.search(text)):
+                return done.returncode
+            # Only a failure to CONNECT to the WSL service (the script never started: nothing ran, nothing to hide)
+            # is waited out, aloud and a few times; any other wsl.exe failure, or the last attempt, stops the run.
+            if WSL_NOT_ANSWERING in text and attempt + 1 < WSL_CONNECT_ATTEMPTS:
+                wait = 10 * 3 ** attempt
+                print(f"lbpmatch: wsl.exe did not answer (the {name} step has not started); waiting {wait}s "
+                      f"(attempt {attempt + 1}/{WSL_CONNECT_ATTEMPTS})", file=sys.stderr, flush=True)
+                time.sleep(wait)
+                continue
+            raise ToolFailure(f"wsl.exe failed during the {name} step (exit {done.returncode}): {text.strip()[:300]}")
+        raise ToolFailure(f"wsl.exe failed during the {name} step")      # not reached: the last attempt raises above
     finally:
         script.unlink(missing_ok=True)
+
+
+def read_log(path: Path, step: str) -> str:
+    """The last 600 characters of a step's log. A log that is not there means the step did not run (or its output was
+    removed): said so, never a crash that leaves the caller with no status line at all."""
+    try:
+        return path.read_text(errors="replace")[-600:]
+    except FileNotFoundError:
+        return f"(no {path.name}: the {step} step produced no output)"
+
+
+# The compiler process itself died (wibo/mwccpsp abort, out of memory) instead of reporting a diagnostic: a fact about
+# the machine, not about the source. Reported as its own status so that no caller reads it as a result for the source.
+COMPILER_CRASH = re.compile(r"terminate called|Aborted|core dumped|Segmentation fault|Bus error|\bKilled\b|Out of memory")
+
+
+def _try_lock(fh) -> bool:
+    try:
+        if os.name == "nt":
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+@contextlib.contextmanager
+def build_dir_locks(lock_dir: Path, keys: list[str]):
+    """Hold an exclusive lock on every build directory key this run writes, for the whole run. A build directory
+    (build/<module>/<key>/) is wiped when a run starts and read when it ends, so two overlapping runs on the same
+    source used to delete each other's obj.o and logs mid-compile (one of them then failed with no status line). The
+    second run now waits for the first one to finish. The locks are OS file locks: they vanish with the process, so a
+    killed run leaves nothing stale. They are taken in sorted order, so two runs over overlapping sets cannot
+    deadlock."""
+    held = []
+    try:
+        for key in sorted(set(keys)):
+            path = lock_dir / f"{key}.lock"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fh = open(path, "a+b")
+            held.append(fh)
+            waited = 0.0
+            while not _try_lock(fh):
+                if waited == 0.0:
+                    print(f"lbpmatch: waiting for another run that is building {key} ...", file=sys.stderr, flush=True)
+                time.sleep(0.2)
+                waited += 0.2
+        yield
+    finally:
+        for fh in held:
+            fh.close()      # closing releases the OS lock
 
 
 def main() -> int:
@@ -566,16 +657,25 @@ def main() -> int:
                          "(a full rebuild shares build/ with any concurrent run)")
     paths = args.paths or sorted(p for p in (ROOT / "src").rglob("*") if p.suffix in (".c", ".cpp"))
     jobs = []
+    keys = []
     # LBPMATCH_BUILD_ROOT: a different directory for the build products (tools/lbppromote.py gives every verification
     # run a fresh one, so no artifact of an earlier run can be read); the comparison is the same
     build_root = Path(os.environ["LBPMATCH_BUILD_ROOT"]) if os.environ.get("LBPMATCH_BUILD_ROOT") else ROOT / "build"
     for p in paths:
         h = parse_header(p)
         out = build_root / h["module"] / build_key(p)
-        out.mkdir(parents=True, exist_ok=True)
-        for f in out.glob("*"):
-            f.unlink()
+        keys.append(f"{h['module']}/{build_key(p)}")
         jobs.append((p, h, out))
+    # one run at a time per build directory: the wipe below and everything after it happen under the lock
+    with build_dir_locks(build_root / ".locks", keys):
+        for p, h, out in jobs:
+            out.mkdir(parents=True, exist_ok=True)
+            for f in out.glob("*"):
+                f.unlink()
+        return build_and_compare(args, flags, jobs)
+
+
+def build_and_compare(args, flags: str, jobs: list) -> int:
     # 1. compile (parallel)
     cmds = []
     native = None
@@ -628,8 +728,8 @@ def main() -> int:
         obj_path = out / "obj.o"
         if not obj_path.exists():
             log_path = out / "compile.log"
-            results[p] = ("COMPILE_FAILED", log_path.read_text(errors="replace")[-600:] if log_path.exists() else
-                          "the compile job wrote no compile.log (it did not run; see the run output)")
+            log = read_log(log_path, "compile")
+            results[p] = ("COMPILE_CRASHED" if COMPILER_CRASH.search(log) else "COMPILE_FAILED", log)
             continue
         obj = obj_path.read_bytes()
         syms = symcache.setdefault(h["module"], load_symbols(h["module"]))
@@ -787,4 +887,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except ToolFailure as e:
+        print(f"TOOL_FAILED: {e}", file=sys.stderr)
+        raise SystemExit(3)

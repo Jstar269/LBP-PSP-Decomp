@@ -218,7 +218,8 @@ class PublishTests(unittest.TestCase):
         self.assertIn("| **Code matched** (T1) | **100.0%** | 256 of the 256 code bytes", b["readme-glance"])
         self.assertIn("| **Functions matched** (T1) | **100.0%** | 1 of the 1 functions", b["readme-glance"])
         self.assertIn("| **Built from source** (T2) | not measured |", b["readme-glance"])
-        self.assertIn("Measured from the accepted proofs of 2026-11-01 with `python tools/lbppublish.py`.",
+        self.assertIn("Measured from the maintainer's private ledger of accepted proofs of 2026-11-01 by "
+                      "`tools/lbppublish.py`, which needs that ledger.",
                       b["readme-glance"])
         self.assertIn("| `EBOOT.BIN` | 1 / 1 | 256 / 256 | 100.000 % |", b["readme-progress"])
         page = "# T\n\n<!-- lbpfigures:begin readme-glance -->\n\nold\n\n<!-- lbpfigures:end -->\n\nAfter.\n"

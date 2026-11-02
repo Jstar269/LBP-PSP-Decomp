@@ -3,7 +3,7 @@
 A readability lane rewrites sources that ALREADY match, so that a person can read them: meaningful names, real
 types, structs, named constants, short comments. The bytes must not change: every file you touch must still be
 `EXACT`. Your lane is an isolated copy of the repository (its root holds `LANE.json`); the main session takes your
-rewrites with `tools/lbplane.py rewrite-harvest`, which re-verifies each one with the main tree's matcher and the
+rewrites with `tools/lbplane.py rewrite-harvest` (a maintainer tool, not in the public tree), which re-verifies each one with the main tree's matcher and the
 promotion gate and keeps the old text for anything that does not hold. Read `AGENTS.md` and `CONTRIBUTING.md` first;
 their integrity rules apply unchanged.
 

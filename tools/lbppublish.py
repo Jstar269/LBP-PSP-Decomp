@@ -281,8 +281,9 @@ def render_blocks(figs: dict) -> dict[str, str]:
     t2 = sum(t["public_t2_bytes"] for t in t2s) if t2s and all(isinstance(t, dict) for t in t2s) else None
     pct = lambda part, whole: 100.0 * part / whole if whole else 0.0      # noqa: E731
     dates = sorted(f["ledger_date"] for f in figs.values() if f.get("ledger_date"))
-    measured = (f"Measured from the accepted proofs of {dates[-1]}" if dates else "Measured") \
-        + " with `python tools/lbppublish.py`"
+    measured = ((f"Measured from the maintainer's private ledger of accepted proofs of {dates[-1]}" if dates
+                 else "Measured from the maintainer's private ledger of accepted proofs")
+                + " by `tools/lbppublish.py`, which needs that ledger")
     built = (f"| **Built from source** (T2) | **{pct(t2, tot['public_scope_bytes']):.1f}%** | The share of that code "
              "which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt "
              "file is identical to the original. |") if t2 is not None else \

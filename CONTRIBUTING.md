@@ -66,7 +66,7 @@ These hold for every file, commit, pull request, issue and comment, here and any
   compilers. The ignore rules already exclude binaries and key files; keep it that way.
 - Do not edit existing lines of `symbols/` (appending is allowed, see below), and do not edit `tools/` as part of a
   matching change.
-- The tools that write into `src/` (`lbpgen`, `lbpclone`, `lbptmpl`, `lbpperm`, `lbpnewlib`) and the one that builds
+- The tools that write into `src/` (`lbpgen`, `lbpclone`, `lbpperm`, `lbpnewlib`) and the one that builds
   batches for matching agents (`lbpqueue`) are run deliberately by whoever runs the campaign, not casually while
   matching a function.
 - Keep scratch work out of the tracked tree: use `try/<your-name>/` (gitignored). Build products go to
@@ -138,8 +138,10 @@ grep -l "start=0x<addr>" src/*/* wip/*
 ```
 
 `module`, `start`, `end` and `symbol` are required (`symbol` must be the name your source defines for the function).
-`lang` is `c99` or `c++`. Optional: `cc=<profile>` (absent means MWCC build 219; GCC sources say `cc=gcc171-O2`,
-`cc=gcc171-Os` or, for unoptimized SDK code, `cc=gcc171-O0`), the section placement keys above, and the experimental `extra=`.
+`lang` is `c99` or `c++`. Optional: `cc=<profile>`, the section placement keys above, and the experimental `extra=`.
+Without `cc=` a source uses the primary profile `gcc404xs-Os` (GCC 4.0.4 with the pspdev Allegrex patch and this
+project's measured changes). The other profiles are `gcc404xs-O0`...`-O3`, the other GCC 4.x builds of `toolchain/gcc4/` (`gcc410-*`, `gcc402x-*`, `gcc402t-*`, `gcc402h-*`, `gcc404x-*`, `gcc404xi-Os`, and the unpatched `gcc402-*`, `gcc432-*`), the decomp.me psp-gcc kits (`gcc131-*`, `gcc171-*`, with `x` after the version for Allegrex `ext`/`ins`), SN Systems SNC (`snc127-O0`...`-O3`) and Metrowerks `mwcc219` (`tools/lbpmatch.py` has the list;
+[`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) says which functions need which).
 
 **Line 2: the note.** Exactly one provenance note, and it must be true. "Hand-written" means a person wrote it; a
 source that started from a generated candidate names the generator tag.
@@ -149,7 +151,7 @@ source that started from a generated candidate names the generator tag.
 - Derived from a generated candidate with small corrections:
   `/* Ghidra pseudocode (lbpgen.py tag <tag>) corrected by hand: <what you changed>; exact match verified; names and types await human review. */`
 - The tools write the other kinds themselves: `Mechanical translation of Ghidra pseudocode (lbpgen.py tag X)`,
-  `Clone of src/... (lbpclone.py tag X)`, `... (template instance, lbptmpl.py tag X)` and
+  `Clone of src/... (lbpclone.py tag X)` and
   `Library source: newlib <release> <dir>/<file>.c function <name>, ...`; the zlib sources name their release first
   (`zlib 1.2.3 (zlib.net, <archive> md5 <digest>), <file>.c; ...`).
 
@@ -163,7 +165,7 @@ source reproduces it as inline asm. Requirements (checked by `tools/lbpgate.py`)
 `asm` template holds only VFPU instructions (`lv.q`, `sv.q`, `vadd.q`, `vdot.q`, `mtv`, `mfv`, `vsync`, ...); a comment
 line in the source starts `Original inline VFPU asm:` and says what in the retail code shows it (for example a block of
 VFPU instructions with the compiler's own register moves around it that no C construct produces). General-register
-instructions inside an asm template remain forbidden. hst-decomp keeps its stricter rule.
+instructions inside an asm template remain forbidden. hst-decomp follows the same rule (owner decision 2026-10-27).
 
 ## Source quality
 
@@ -206,7 +208,7 @@ python tools/lbpprcheck.py --base origin/main                  # what CI checks 
 `try/`, `inputs/`, `campaign/`, `lbp-config.json`), personal paths and tokens, disassembly-like listings, changed lines
 in `symbols/`, sources without a valid header or note, and anything the fake-match gate refuses. When a change adds
 files, `python tools/lbpreuse.py check` confirms that every tracked file is covered by the licence map (`REUSE.toml`);
-new library sources need `python tools/lbpreuse.py newlib --write` first. `ORIGINS.json` is a snapshot made by
+new library sources need `python tools/lbpreuse.py generate --write` first. `ORIGINS.json` is a snapshot made by
 `python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
 
 For a change that touches many sources, `python tools/lbpmatch.py --all` is the full regression (it shares `build/`

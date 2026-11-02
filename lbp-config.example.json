@@ -1,6 +1,6 @@
 {
   "_about": "Copy this file to lbp-config.json (gitignored) and replace every placeholder with a path on your machine. Any key can instead be set with the environment variable LBP_<KEY> (upper case, e.g. LBP_CAMPAIGN_ROOT), which overrides the file. Keys starting with an underscore are comments. 'host' paths are paths on the machine that runs the tools (JSON needs backslashes doubled); 'wsl' paths are as seen from inside WSL and are pasted into sh command lines, so $HOME is allowed. Check the result with: python tools/lbpconfig.py check",
-  "_campaign_root": "host. Campaign directory with ledger/campaign.json (the function list and load segments of each module) and inputs/revision-selection.json (where your own decrypted retail modules live). The exact-match tools read retail bytes through it. Used by lbpmatch, lbpdiff, lbpdis, lbpcov, lbpclone, lbpfamilies, lbpgen, lbpqueue, lbptmpl, lbplib, lbpsample.",
+  "_campaign_root": "host. Campaign directory with ledger/campaign.json (the function list and load segments of each module) and inputs/revision-selection.json (where your own decrypted retail modules live). The exact-match tools read retail bytes through it. Used by lbpmatch, lbpdiff, lbpdis, lbpcov, lbpclone, lbpfamilies, lbpgen, lbpqueue, lbplib, lbpsample.",
   "campaign_root": "C:\\hst\\campaign-build",
   "_pspdev_bin": "wsl. Directory inside WSL with the PSPDEV binutils psp-ld, psp-objcopy and psp-objdump. lbpmatch links and extracts with them; lbpdiff disassembles with them.",
   "pspdev_bin": "/mnt/c/hst/toolchain/pspdev/bin",
