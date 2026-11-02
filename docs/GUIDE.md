@@ -20,7 +20,8 @@ The tools run on a **Windows host and drive the compilers inside WSL** (they cal
 ## Setup
 
 1. Decrypt `PSP_GAME/SYSDIR/EBOOT.BIN` of your own disc locally (never in a public tree) with a tool of your choice,
-   into `inputs/` (gitignored); this repository has no decryption code. If you have a PSP game decryptor script,
+   for example Nakagawa Recomp's `nk_decrypt` ([how to run it](https://github.com/Jstar269/nakagawa-recomp/blob/main/docs/SETUP.md#encrypted-executables)), into `inputs/` (gitignored); this
+   repository has no decryption code. If you have a PSP game decryptor script,
    `python tools/lbpintake.py --iso <your image> --decryptor <script>` runs it read-only and writes the decrypted
    modules under `inputs/`; the maintainers' `decryptor` setting names theirs, which is not published.
 2. Describe your machine: `copy lbp-config.example.json lbp-config.json`, edit, then

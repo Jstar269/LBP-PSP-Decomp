@@ -59,8 +59,9 @@ start with. Every task here needs your own copy of the game. You can also re-che
 machine:
 
 1. Bring your own copy of the game. The tools need its executable, `PSP_GAME/SYSDIR/EBOOT.BIN`, decrypted on your
-   own machine into `inputs/` (gitignored) with a tool of your choice; this repository contains no decryption code.
-   Its SHA-256 must equal the one in `data/modules.json`.
+   own machine into `inputs/` (gitignored) with a tool of your choice, for example Nakagawa Recomp's `nk_decrypt`
+   ([how to run it](https://github.com/Jstar269/nakagawa-recomp/blob/main/docs/SETUP.md#encrypted-executables));
+   this repository contains no decryption code. Its SHA-256 must equal the one in `data/modules.json`.
 2. Install the compilers in WSL (`toolchain/gcc4/` builds GCC 4.0.4 with the pspdev Allegrex patch and this
    project's measured Allegrex changes) and set up the campaign directory: [Setup](docs/GUIDE.md#setup).
 3. Run `python tools/lbpmatch.py --all --parallel 4`.
