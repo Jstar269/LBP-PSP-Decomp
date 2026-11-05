@@ -3,5 +3,5 @@
 FINGERPRINT psp-gcc-4.0.2h 9fd7dd0bdabb4012af76845f850576ec29472191198bee27bb0c81ee0d9ea784 compiled=973 failed=369
 FINGERPRINT psp-gcc-4.0.2x cb9050fb77d9a48fe7df1000a900daa6952720da7efda27d7e9a37e8be869c57 compiled=973 failed=369
 FINGERPRINT psp-gcc-4.0.4h b10c65d8efdfbf10edcdf35915beca78b5f0d825b650e8c9c8895ccb35c570e3 compiled=980 failed=362
-FINGERPRINT psp-gcc-4.0.4x 755eb61220f19f1d2cec63295d097f383c62682b88d8cf961d945205089ba88c compiled=980 failed=362
+FINGERPRINT psp-gcc-4.0.4x 88d8023371806afa2dcfdaba87a51d5718e3b34ef2105f7d34f3cf51c32980e7 compiled=980 failed=362
 FINGERPRINT psp-gcc-4.1.0s 5f47e8bcc7403f1c76fad6c69cd7fb649be15a5e5974d11569efc4cbc6a3d1ee compiled=976 failed=366

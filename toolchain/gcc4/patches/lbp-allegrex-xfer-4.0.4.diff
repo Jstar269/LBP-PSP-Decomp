@@ -1,0 +1,17 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+lbp-decomp xfer change for GCC 4.0.4 (after the pspdev patch, lbp-allegrex-tuning.diff and lbp-ins-from-zero-4.0.4.diff):
+applies with `patch -p1` in gcc-4.0.4/. The Allegrex interlocks mtc1/mfc1, so no nop is put between an mtc1/mfc1 and
+the first use of its register (retail EBOOT: 718 mtc1 and 215 mfc1 followed by a reader, none with a nop between). The
+floating-point compare delay stays (retail: no c.cond directly before bc1, 1,752 with a nop). Adopted 2026-11-04 as
+psp-gcc-4.0.4w, installed as psp-gcc-4.0.4x.
+--- a/gcc/config/mips/mips.h
++++ b/gcc/config/mips/mips.h
+@@ -1015,7 +1015,7 @@
+ 				 && !TARGET_MIPS16)
+
+ /* Likewise mtc1 and mfc1.  */
+-#define ISA_HAS_XFER_DELAY	(mips_isa <= 3)
++#define ISA_HAS_XFER_DELAY	(mips_isa <= 3 && !TARGET_ALLEGREX)
+
+ /* Likewise floating-point comparisons.  */
+ #define ISA_HAS_FCMP_DELAY	(mips_isa <= 3)

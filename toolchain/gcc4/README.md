@@ -7,7 +7,7 @@ binaries. Run everything inside Linux (WSL Ubuntu 24.04 is what the recorded bui
 
 | Build | Made from | Used by profiles (`cc=` in `src/`, counts at commit time) |
 | --- | --- | --- |
-| `psp-gcc-4.0.4x` | GCC 4.0.4 + pspdev patch 65aaa94632 + all four project changes | `gcc404xs-Os` (**PRIMARY**, 1,784 sources), `gcc404xs-O2` (319) |
+| `psp-gcc-4.0.4x` | GCC 4.0.4 + pspdev patch 65aaa94632 + all five project changes | `gcc404xs-Os` (**PRIMARY**, 1,784 sources), `gcc404xs-O2` (319) |
 | `psp-gcc-4.0.2x` | GCC 4.0.2 + pspdev patch 65aaa94632 + the three tuning changes (no ins-from-zero) | `gcc402x-Os` (989), `gcc402x-O2` (151), `gcc402x-O1` (104) |
 | `psp-gcc-4.0.2h` | GCC 4.0.2 + pspdev patch 65aaa94632, unchanged | `gcc402t-Os` (56), `gcc402t-O2` (10) (with `-mtune=r4000`) |
 | `psp-gcc-4.1.0s` | GCC 4.1.0 + pspdev `gcc-4.1.0-PSP.patch` (7be303fec4), unchanged | `gcc410-Os` (1,975) |
@@ -31,7 +31,12 @@ adopted (owner decisions 2026-10-27 and 2026-10-28; evidence in `docs/TOOLCHAIN.
    measured variants;
 4. ins-from-zero (4.0.4x only): an SImode `and` with a constant mask that clears one contiguous run of bits and that
    `andi` cannot encode is emitted as `ins rd,$0,pos,len`, as the retail code does (`LBP_INS_CLEAR_LOW_ONLY 0`: any
-   run, the adopted variant) - `lbp-ins-from-zero-4.0.4.diff`, applied after the tuning diff.
+   run, the adopted variant) - `lbp-ins-from-zero-4.0.4.diff`, applied after the tuning diff;
+5. no transfer delay (4.0.4x only, adopted 2026-11-04): the Allegrex interlocks `mtc1`/`mfc1`, so no `nop` is put
+   between them and the first use of their register (`ISA_HAS_XFER_DELAY` is off for the Allegrex; the
+   floating-point compare delay stays), as the retail code does - `lbp-allegrex-xfer-4.0.4.diff`, applied last. It
+   was added after the reproduction below; the current `cc1`/`cc1plus` hashes and fingerprint are those of the
+   install made with it (PROVENANCE.json `xfer_change_2026_11_04`).
 
 `trees/psp-gcc-<build>.sha256` holds the SHA-256 of every source file the pspdev patch and these changes touch, taken
 from the recorded builds' work trees (for 4.0.2x, whose work tree a later experiment edited, from this kit's

@@ -37,11 +37,11 @@ the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), whic
 
 | | Progress | What it counts |
 |---|---|---|
-| **Code matched** (T1) | **17.0%** | 486,116 of the 2,860,396 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
-| **Functions matched** (T1) | **40.2%** | 4,703 of the 11,693 functions of the public scope. |
-| **Built from source** (T2) | **17.0%** | The share of that code which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt file is identical to the original. |
+| **Code matched** (T1) | **17.9%** | 511,672 of the 2,860,624 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
+| **Functions matched** (T1) | **42.5%** | 4,979 of the 11,712 functions of the public scope. |
+| **Built from source** (T2) | not measured | No whole-module build of the current accepted proofs yet (`python tools/lbpbuild.py`). |
 
-Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-01 by `tools/lbppublish.py`, which needs that ledger.
+Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-05 by `tools/lbppublish.py`, which needs that ledger.
 
 <!-- lbpfigures:end -->
 
@@ -80,13 +80,13 @@ output of the game to web tools such as decomp.me, pastebins or public issues.
 
 <!-- lbpfigures:begin readme-progress -->
 
-**4,703 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-01 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
+**4,979 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-05 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
 
 | Module | Matched / functions | Matched / code bytes | Share of bytes |
 |---|---|---|---|
-| `EBOOT.BIN` | 4,703 / 11,693 | 486,116 / 2,860,396 | 16.995 % |
+| `EBOOT.BIN` | 4,979 / 11,712 | 511,672 / 2,860,624 | 17.887 % |
 
-`EBOOT.BIN` built from source (T2): 486,116 code bytes of the public scope (16.995 %), and 1,264 data bytes; the rebuilt file is byte-identical to the original.
+`EBOOT.BIN` built from source (T2): not measured (no whole-module build report: python tools/lbpbuild.py).
 
 <!-- lbpfigures:end -->
 

@@ -94,7 +94,8 @@
  "project_change_files": {
   "patches/lbp-allegrex-tuning.diff": "9ee2f12a9c0fdb40900107ecc726115233253b620c650f51b6f82abfae48f540",
   "patches/allegrex-sched.md": "16c9a34dc48b6e5102a2dfdf5b6c805fa2ba090cd84c9fb388c322279e30fe33",
-  "patches/lbp-ins-from-zero-4.0.4.diff": "35ca53ca02ada4f50f5d3eb07bdbd6069f9e48c51f4bd86166eb954657a9a901"
+  "patches/lbp-ins-from-zero-4.0.4.diff": "35ca53ca02ada4f50f5d3eb07bdbd6069f9e48c51f4bd86166eb954657a9a901",
+  "patches/lbp-allegrex-xfer-4.0.4.diff": "c033cdbce16b7bcdc64e1c22786b63c998fa5f338d8886f19c7cfd6553f4de4f"
  },
  "recorded_configuration": "expected_sha256 are the maintainer's installs (the hashes data/toolchain-manifest.json pins), configured with <root> = the maintainer's $HOME/lbp-gcc4, assembler <root>/sony-as and the maintainer's PSPDEV_BIN (pspdev v20261001). Those path strings are compiled into the programs and are not published; the fingerprint does not depend on them.",
  "builds": {
@@ -104,7 +105,8 @@
    "project_changes": [
     "patches/lbp-allegrex-tuning.diff",
     "patches/allegrex-sched.md",
-    "patches/lbp-ins-from-zero-4.0.4.diff"
+    "patches/lbp-ins-from-zero-4.0.4.diff",
+    "patches/lbp-allegrex-xfer-4.0.4.diff"
    ],
    "made_from": "the psp-gcc-4.0.4h work tree with the project changes, cc1/cc1plus rebuilt there; install = the psp-gcc-4.0.4h install with the new cc1/cc1plus (so its configured prefix is the psp-gcc-4.0.4h one)",
    "profiles": [
@@ -120,12 +122,13 @@
     "bin/psp-gcc-4.0.4": "dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333",
     "bin/psp-gccbug": "515777249031f0cd8fc40ac568a85846b2d40996fd6c9a7504d36e177fa4c8fa",
     "bin/psp-gcov": "11469a8b98e7ced77859c950947a370865115205b8d3f723961f2cb563022c01",
-    "libexec/gcc/psp/4.0.4/cc1": "20dad5b1f66aa90240143ba520b2e82a3e99bffe81fa1284307cf1a14ba08266",
-    "libexec/gcc/psp/4.0.4/cc1plus": "5c60f42c88b9be78aeaf31f950687ce74b1291a9d3e198c7c6502cbdcfeacf45",
+    "libexec/gcc/psp/4.0.4/cc1": "c1e0e28bc0479600df5a98ea11af6cb0b04720e0a18b3e5579eaf4839a7e3769",
+    "libexec/gcc/psp/4.0.4/cc1plus": "165786919b1a23af1a0d7d0e5055c848118f30ca22277c9737a5ce4b67f67d98",
     "libexec/gcc/psp/4.0.4/collect2": "4ba666d02f4bd8dbbc32eee935f09f60e2e13b4236ad93cbd4cf3a296dbbc992"
    },
-   "fingerprint": "755eb61220f19f1d2cec63295d097f383c62682b88d8cf961d945205089ba88c",
+   "fingerprint": "88d8023371806afa2dcfdaba87a51d5718e3b34ef2105f7d34f3cf51c32980e7",
    "reproduced": {
+    "xfer_change_2026_11_04": "lbp-allegrex-xfer-4.0.4.diff was added after the rebuilds below: the current cc1/cc1plus were made by the same procedure (a copy of the recorded psp-gcc-4.0.4x work tree with the change applied, cc1/cc1plus rebuilt there with the recorded cflags, installed into a copy of the psp-gcc-4.0.4x install); the fingerprint is that install's. build.sh with all three diffs has not been re-run end to end since.",
     "rebuild_with_recorded_path_strings": "all 9 installed programs byte-identical to expected_sha256 (2026-10-28: built by this kit from freshly fetched sources, in a private mount namespace with an empty directory bind-mounted over the recorded install root, so the recorded installs were not touched)",
     "rebuild_in_a_fresh_prefix": {
      "identical": [

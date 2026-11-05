@@ -1,4 +1,4 @@
 16c9a34dc48b6e5102a2dfdf5b6c805fa2ba090cd84c9fb388c322279e30fe33  gcc/config/mips/allegrex-sched.md
-5336bb0c9bb3194f492bbefa02b6ac15560c4fecb08130d7e31599554dba45b1  gcc/config/mips/mips.h
+859dc7ca53efefb18a76b25d2cb046a7b04b355a901e8e591cfa0f484f5d0dbd  gcc/config/mips/mips.h
 63a2dde1fc4704ac634fd5f585bd663f806c9cf2536c6e8d25436af48d2e5cb0  gcc/config/mips/mips.md
 4f58c6b78eb8c5f206d2c68e0e8b5322606713598f5c4af69e590361c416a946  gcc/config/mips/predicates.md

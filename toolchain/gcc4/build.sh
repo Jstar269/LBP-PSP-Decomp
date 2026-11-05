@@ -59,7 +59,7 @@ spec() {  # sets VER PATCHF REJ HF BASE DIFFS for build $1
     4.0.4h) VER=4.0.4 PATCHF=65aaa94632-gcc-4.0.2.patch REJ=gcc/version.c.rej ;;
     4.1.0s) VER=4.1.0 PATCHF=7be303fec4-gcc-4.1.0-PSP.patch HF="$HF0 $HFGMP" ;;
     4.0.2x) VER=4.0.2 BASE=4.0.2h DIFFS=lbp-allegrex-tuning.diff ;;
-    4.0.4x) VER=4.0.4 BASE=4.0.4h DIFFS="lbp-allegrex-tuning.diff lbp-ins-from-zero-4.0.4.diff" ;;
+    4.0.4x) VER=4.0.4 BASE=4.0.4h DIFFS="lbp-allegrex-tuning.diff lbp-ins-from-zero-4.0.4.diff lbp-allegrex-xfer-4.0.4.diff" ;;
     *) die "unknown build '$1' (want 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s or all)" ;;
   esac
 }
