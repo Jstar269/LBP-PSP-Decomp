@@ -294,6 +294,8 @@ path = [
   "src/eboot/f08b8a99c_08b8a99c.c",
   "src/eboot/f08b8a9d0_08b8a9d0.c",
   "src/eboot/f08b8aa04_08b8aa04.c",
+  "src/eboot/f08b8ab50.c",
+  "src/eboot/f08b8ab84.c",
   "src/eboot/f08b8abb8_08b8abb8.c",
   "src/eboot/f08b8ac1c_08b8ac1c.c",
   "src/eboot/function_08b88058.c",

@@ -8,12 +8,12 @@
    "startup": 1244,
    "unattributed": 5716
   },
-  "ledger_date": "2026-11-05",
+  "ledger_date": "2026-11-08",
   "public_scope_bytes": 2860624,
   "public_scope_functions": 11712,
-  "public_t1_bytes": 513300,
-  "public_t1_functions": 5020,
-  "public_t1_percent": 17.944,
+  "public_t1_bytes": 516652,
+  "public_t1_functions": 5051,
+  "public_t1_percent": 18.061,
   "strict_scope_bytes": 3827976,
   "t2": "not measured (no whole-module build report: python tools/lbpbuild.py)",
   "t3": "not measured"

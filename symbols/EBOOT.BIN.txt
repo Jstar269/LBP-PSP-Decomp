@@ -398,3 +398,7 @@ _ZdaPv = 0x08a9e0c4;   # operator delete[](void*): World::Clear 0x08a10e44 frees
 _ZNK12Ref_08804f3c3getEv = 0x08804f34;   # shared-pointer get() (return the object pointer); its address is the true value of the safe-bool conversion tested by 0x089eb6a8/0x089eb860/0x089ebb2c [lbp-decomp lane 2026-11-04]
 _ZN12Ref_08804f3cD1Ev = 0x08804f3c;   # shared-pointer release (src/eboot/shared_release_08804f3c.cpp) as the destructor of the {object, count} pair [lbp-decomp lane 2026-11-04]
 _Znaj = 0x08a9e824;   # operator new[](unsigned int): 200 callers against 815 for 0x08a9e838 (operator new); new Rec[512] at 0x08a115e0 calls it with no null test [lbp-decomp lane 2026-11-04]
+PTR_FUN_08bae388 = 0x08bae388;   # via lane lbp16b
+DAT_08bedb94 = 0x08bedb94;   # via lane lbp16b
+PTR_FUN_08bae3b8 = 0x08bae3b8;   # via lane lbp16b
+FUN_08a9e0c4 = 0x08a9e0c4;   # via lane lbp16b
