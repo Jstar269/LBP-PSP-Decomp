@@ -240,6 +240,8 @@ path = [
   "src/eboot/FUN_08b9be28.c",
   "src/eboot/FUN_08b9bee0.c",
   "src/eboot/FUN_08b9c060.c",
+  "src/eboot/cleanup_trampoline_08b8dbd0.c",
+  "src/eboot/cleanup_trampoline_08b8dc00.c",
   "src/eboot/compare_08b9b684.c",
   "src/eboot/ctor_set_vtbl_08b89270.c",
   "src/eboot/ctor_set_vtbl_08b892a0.c",
