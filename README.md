@@ -37,11 +37,11 @@ the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), whic
 
 | | Progress | What it counts |
 |---|---|---|
-| **Code matched** (T1) | **18.1%** | 518,692 of the 2,860,624 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
-| **Functions matched** (T1) | **43.2%** | 5,064 of the 11,712 functions of the public scope. |
+| **Code matched** (T1) | **18.4%** | 525,372 of the 2,860,624 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
+| **Functions matched** (T1) | **43.6%** | 5,104 of the 11,712 functions of the public scope. |
 | **Built from source** (T2) | not measured | No whole-module build of the current accepted proofs yet (`python tools/lbpbuild.py`). |
 
-Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-08 by `tools/lbppublish.py`, which needs that ledger.
+Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-09 by `tools/lbppublish.py`, which needs that ledger.
 
 <!-- lbpfigures:end -->
 
@@ -80,11 +80,11 @@ output of the game to web tools such as decomp.me, pastebins or public issues.
 
 <!-- lbpfigures:begin readme-progress -->
 
-**5,064 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-08 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
+**5,104 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-09 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
 
 | Module | Matched / functions | Matched / code bytes | Share of bytes |
 |---|---|---|---|
-| `EBOOT.BIN` | 5,064 / 11,712 | 518,692 / 2,860,624 | 18.132 % |
+| `EBOOT.BIN` | 5,104 / 11,712 | 525,372 / 2,860,624 | 18.366 % |
 
 `EBOOT.BIN` built from source (T2): not measured (no whole-module build report: python tools/lbpbuild.py).
 
