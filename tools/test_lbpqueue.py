@@ -22,7 +22,7 @@ class FlagTests(unittest.TestCase):
               ins(2, 0, 4, 7),      # ins v0,$zero,4,4: a bit-field clear
               ins(2, 3, 0, 2),      # ins v0,v1,0,3: not from $zero
               0x24420001]           # addiu v0,v0,1
-        self.assertEqual(Q.flags(ws), {"ins_zero": 2, "vfpu": 0, "unaligned": 0})
+        self.assertEqual(Q.flags(ws), {"ins_zero": 2, "vfpu": 0, "unaligned": 0, "div": 0})
 
     def test_vfpu_words_are_counted(self) -> None:
         self.assertEqual(Q.flags([0xD8000000, 0x48600000, 0x03E00008])["vfpu"], 2)   # lv.q, mtv; jr ra is not
@@ -31,6 +31,13 @@ class FlagTests(unittest.TestCase):
         ws = [0x88820004, 0x98820001, 0xA8850004, 0xB8850001,   # lwl, lwr, swl, swr
               0x8C820004, 0xAC850004]                          # lw, sw are not
         self.assertEqual(Q.flags(ws)["unaligned"], 4)
+
+    def test_division_words_are_counted(self) -> None:
+        ws = [0x00A2001B,                                       # divu zero,a1,v0
+              0x0082001A,                                       # div zero,a0,v0
+              0x000001CD,                                       # break 7 is not
+              0x00001810, 0x00A20019]                           # mfhi, multu are not
+        self.assertEqual(Q.flags(ws)["div"], 2)
 
     def test_single_weight_peaks_near_192_bytes(self) -> None:
         self.assertGreater(Q.single_weight(192), Q.single_weight(64))

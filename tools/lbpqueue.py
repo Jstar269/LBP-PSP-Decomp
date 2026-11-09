@@ -29,7 +29,8 @@ Kinds (each ranks the functions that are not covered by src/, not reserved and n
 Flags from the retail words (for the lane and the ranking): `ins_zero` counts `ins rt,$zero,pos,n` (bit-field stores
 of zero and contiguous clear masks such as `x & ~7`; the primary compiler emits both since the ins-from-zero change of
 2026-10-28, docs/TOOLCHAIN.md), `vfpu` counts VFPU instructions (inline VFPU asm, asm=vfpu rules), `unaligned`
-counts lwl/lwr/swl/swr (assembled since the -mulsw change of 2026-10-29), `snc` marks the SNC-built library (cc_hint
+counts lwl/lwr/swl/swr (assembled since the -mulsw change of 2026-10-29), `div` counts integer div/divu (GCC's
+`bnez; div; break 7` guard; lbpgen.py drops Ghidra's `trap(7)` for it since 2026-11-09), `snc` marks the SNC-built library (cc_hint
 snc127-O2; try/snc-functions.txt). VFPU functions sort last; SNC functions only with --include-snc. `--flag NAME`
 keeps only functions with that flag, and offers attempted ones again (lanes skipped them before the change).
 
@@ -66,11 +67,13 @@ PROGRESS = re.compile(r"^\s*(0x[0-9A-Fa-f]{6,8})\s+(EXACT|NEAR|SKIP)\b")
 
 def flags(ws: list[int]) -> dict:
     """ins_zero: `ins rt,$zero,pos,n` (SPECIAL3 0x1f, function 0x04, rs = $zero); vfpu: VFPU opcodes and COP2 moves
-    (mfv/mtv/bvf, opcode 0x12); unaligned: lwl/lwr/swl/swr (opcodes 0x22, 0x26, 0x2a, 0x2e)."""
+    (mfv/mtv/bvf, opcode 0x12); unaligned: lwl/lwr/swl/swr (opcodes 0x22, 0x26, 0x2a, 0x2e); div: div/divu (SPECIAL
+    functions 0x1a, 0x1b)."""
     ins0 = sum(1 for w in ws if w >> 26 == 0x1F and w & 0x3F == 0x04 and (w >> 21) & 31 == 0)
     vfpu = sum(1 for w in ws if w >> 26 in VFPU_OPS or w >> 26 == 0x12)
     unaligned = sum(1 for w in ws if w >> 26 in UNALIGNED_OPS)
-    return {"ins_zero": ins0, "vfpu": vfpu, "unaligned": unaligned}
+    div = sum(1 for w in ws if w >> 26 == 0 and w & 0x3F in (0x1A, 0x1B))
+    return {"ins_zero": ins0, "vfpu": vfpu, "unaligned": unaligned, "div": div}
 
 
 def best_generated(root: Path) -> dict[int, dict]:
@@ -373,7 +376,7 @@ def main() -> int:
     ap.add_argument("--min-size", type=int, default=32)
     ap.add_argument("--max-size", type=int, default=1024)
     ap.add_argument("--include-snc", action="store_true")
-    ap.add_argument("--flag", choices=("ins_zero", "vfpu", "unaligned"),
+    ap.add_argument("--flag", choices=("ins_zero", "vfpu", "unaligned", "div"),
                     help="only functions with this retail flag, attempted ones included")
     ap.add_argument("--exclude", type=lambda v: [int(a, 16) for a in v.split(",") if a], default=[],
                     help="addresses never to offer (e.g. matched but not installed yet)")

@@ -402,3 +402,7 @@ PTR_FUN_08bae388 = 0x08bae388;   # via lane lbp16b
 DAT_08bedb94 = 0x08bedb94;   # via lane lbp16b
 PTR_FUN_08bae3b8 = 0x08bae3b8;   # via lane lbp16b
 FUN_08a9e0c4 = 0x08a9e0c4;   # via lane lbp16b
+_ZTV16ObjBase_08a4c488 = 0x08bc5ce8;   # vtable (vptr 0x08bc5cf0) stored first by the constructor 0x08a4c488 (lane lbp19o) [lane lbp19o]
+_ZTV12Obj_08a4c488 = 0x08bc5cd8;   # vtable (vptr 0x08bc5ce0) stored after the base part by 0x08a4c488 (lane lbp19o) [lane lbp19o]
+_ZN12Obj_08a4c48812FUN_08a4bda8EPvS0_ = 0x08a4bda8;   # member tail-called with (this, a, b) by the constructor 0x08a4c488 (lane lbp19o) [lane lbp19o]
+_ZN17JointVec_08a11e2410insert_auxE18JointIter_08a11e24RKP14Joint_08a11e24 = 0x08a06548;   # vector insert_aux(pos, const T&) called by push_back in 0x08a11e24 (lane lbp19o) [lane lbp19o]

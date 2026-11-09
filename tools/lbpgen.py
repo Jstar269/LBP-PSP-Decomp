@@ -633,7 +633,21 @@ def fold_signed_division(body: str) -> str:
     return body
 
 
+DIV_TRAP_GUARD = re.compile(r"^[ \t]*if \([^\n{}]*== 0\) \{\n[ \t]*trap\(7\);\n[ \t]*\}\n", re.M)
+DIV_TRAP_BARE = re.compile(r"^[ \t]*trap\(7\);\n", re.M)
+
+
+def drop_division_traps(text: str) -> str:
+    """GCC guards every integer division by a variable with `bnez divisor; div; break 7` (the MIPS divide-by-zero
+    trap); Ghidra prints that guard as `if (d == 0) { trap(7); }` in front of the `/` or `%`. The guard is the
+    compiler's, not the source's (0x0894a7bc is EXACT from `x % s->n`), so it is removed; any other trap code stays
+    untranslatable."""
+    text = DIV_TRAP_GUARD.sub("", text)
+    return DIV_TRAP_BARE.sub("", text)
+
+
 def translate(name: str, text: str, protos: dict[str, str], variant: dict) -> str | None:
+    text = drop_division_traps(text)
     if FORBIDDEN.search(text):
         return None
     sig = signature(text)
