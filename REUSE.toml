@@ -306,6 +306,7 @@ path = [
   "src/eboot/function_08b882d0.c",
   "src/eboot/lane13a_08b8d018.c",
   "src/eboot/lane13a_08b97ce8.c",
+  "src/eboot/near_08b8dd54.c",
   "src/eboot/near_08b912fc.c",
   "src/eboot/read_encoded_value_08b8d144.c",
   "src/eboot/read_encoded_value_08b9b37c.c",

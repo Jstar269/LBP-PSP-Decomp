@@ -3,7 +3,7 @@
 # Build the open-source GCC 4.x PSP cross compilers that lbp-decomp's sources use, from the GNU release tarballs, the
 # pspdev/ps2dev Allegrex patches and this project's changes in patches/. See README.md.
 #
-#   sh build.sh BUILD...        BUILD = 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s, or all
+#   sh build.sh BUILD...        BUILD = 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s, or all
 #
 # Each BUILD installs the compiler proper (driver, cc1, cc1plus, collect2, gcov) into $LBP_GCC4_ROOT/psp-gcc-BUILD.
 # An x build is its h build plus this project's changes: it copies the h work tree, applies the changes, rebuilds
@@ -38,7 +38,7 @@ die() { echo "BUILD_FAIL $*" >&2; exit 1; }
 for v in "$ROOT" "$DL" "$WORK" "$SONY_AS" "$PSPDEV_BIN" "$HOST_TOOLS"; do
   case $v in /*) ;; *) die "paths must be absolute (got '$v'); set PSPDEV_BIN" ;; esac
 done
-[ $# -gt 0 ] || die "usage: sh build.sh BUILD... (4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s, or all)"
+[ $# -gt 0 ] || die "usage: sh build.sh BUILD... (4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s, or all)"
 
 # A clean, fixed host environment: the recorded builds were made with exactly these flags and no others.
 unset CPPFLAGS LDFLAGS LIBS CPP CONFIG_SITE GCC_EXEC_PREFIX COMPILER_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH \
@@ -60,7 +60,8 @@ spec() {  # sets VER PATCHF REJ HF BASE DIFFS for build $1
     4.1.0s) VER=4.1.0 PATCHF=7be303fec4-gcc-4.1.0-PSP.patch HF="$HF0 $HFGMP" ;;
     4.0.2x) VER=4.0.2 BASE=4.0.2h DIFFS=lbp-allegrex-tuning.diff ;;
     4.0.4x) VER=4.0.4 BASE=4.0.4h DIFFS="lbp-allegrex-tuning.diff lbp-ins-from-zero-4.0.4.diff lbp-allegrex-xfer-4.0.4.diff" ;;
-    *) die "unknown build '$1' (want 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s or all)" ;;
+    4.0.4c) VER=4.0.4 BASE=4.0.4h DIFFS="lbp-allegrex-tuning.diff lbp-ins-from-zero-4.0.4.diff lbp-allegrex-xfer-4.0.4.diff lbp-copy-order-asm-slot-4.0.4.diff" ;;
+    *) die "unknown build '$1' (want 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s or all)" ;;
   esac
 }
 
@@ -148,6 +149,6 @@ echo "pspdev: $("$PSPDEV_BIN/psp-ld" --version | head -1)"
 sh "$HERE/fetch.sh" "$DL"
 mkdir -p "$WORK"
 
-[ "$*" = all ] && set -- 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s
+[ "$*" = all ] && set -- 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s
 for b; do ( build "$b" ); done
 echo "ALL_DONE $*"

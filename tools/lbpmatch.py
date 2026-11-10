@@ -92,7 +92,11 @@ GCC_PROFILE_NAMES = (frozenset(f"gcc{v}{x}-{o}" for v in ("131", "171") for o in
                      # gcc404xs-* = gcc404x-* + -fno-exceptions, and at -Os GCC 4.0.4's default inline limits restored
                      # (max-inline-insns-single=450, -auto=90: Sony's -Os does not lower them as GNU's opts.c does);
                      # PRIMARY from 2026-10-27 (docs/TOOLCHAIN.md "Inline limit and exceptions")
-                     | frozenset(f"gcc404xs-{o}" for o in ("O0", "O1", "O2", "O3", "Os")))
+                     | frozenset(f"gcc404xs-{o}" for o in ("O0", "O1", "O2", "O3", "Os"))
+                     # gcc404p-* / gcc404ps-* = the gcc404x-* / gcc404xs-* profiles on the PREVIOUS primary build
+                     # psp-gcc-4.0.4x (before change C1 of 2026-11-09), kept so that the migration can be undone and any
+                     # proof re-run under either build (docs/TOOLCHAIN.md, Findings log 2026-11-09)
+                     | frozenset(f"gcc404{p}-{o}" for p in ("p", "ps") for o in ("O0", "O1", "O2", "O3", "Os")))
 _gcc_profiles: dict | None = None
 # PRIMARY profile (owner decision 2026-10-27, superseding gcc402x the same day): gcc404x, GCC 4.0.4 + the pspdev 2007
 # patch revision + this project's three measured Allegrex changes (docs/TOOLCHAIN.md "Compiler identification" and
@@ -108,6 +112,10 @@ _gcc_profiles: dict | None = None
 # `ins rd,$zero,pos,len`, as Sony's compiler does (exp/build_ins.sh; the three-change build is kept as
 # ~/lbp-gcc4/psp-gcc-4.0.4x3). Fixed sample 295 EXACT / 2,827 words left (was 291 / 2,942); all 1,172 sources built by
 # 4.0.4x stay EXACT; zlib inflateSync EXACT from the stock source (docs/TOOLCHAIN.md "ins from $zero").
+# 2026-11-09 (owner decision via the coordinator, adopted on measurement): the gcc404x* profiles moved to the build
+# psp-gcc-4.0.4c = 4.0.4x + change C1 (retail block-copy order, one-instruction asm in delay slots;
+# toolchain/gcc4/patches/lbp-copy-order-asm-slot-4.0.4.diff). All 6,474 promoted sources EXACT under it; the previous
+# build stays reachable as gcc404p*/gcc404ps*.
 PRIMARY_PROFILE = "gcc404xs-Os"
 # SN Systems SNC for PSP (decomp.me kit pspsnc_1.2.7503.0, a Windows binary run natively): header cc=snc127-O<n>.
 # Part of LittleBigPlanet's linked libraries is SNC output (`or` moves, `ori` constants, s-registers stored from the
@@ -157,8 +165,11 @@ def gcc_profiles() -> dict:
               "402h": ("4.0.2h", " -mpreferred-stack-boundary=4"),
               "402t": ("4.0.2h", " -mpreferred-stack-boundary=4 -mtune=r4000"),
               "402x": ("4.0.2x", " -mpreferred-stack-boundary=4"),
-              # gcc404x-*: PRIMARY: the gcc402x changes on GCC 4.0.4 (C++ static-init test order as retail; 2026-10-27)
-              "404x": ("4.0.4x", " -mpreferred-stack-boundary=4")}
+              # gcc404x-*: PRIMARY: the gcc402x changes on GCC 4.0.4 (C++ static-init test order as retail; 2026-10-27);
+              # build psp-gcc-4.0.4c since 2026-11-09 (change C1: retail block-copy order, one-instruction asm in
+              # delay slots); gcc404p-*: the same flags on the previous build psp-gcc-4.0.4x
+              "404x": ("4.0.4c", " -mpreferred-stack-boundary=4"),
+              "404p": ("4.0.4x", " -mpreferred-stack-boundary=4")}
         # -mulsw: the Sony assembler rejects lwl/lwr/swl/swr on -march=allegrex unless given its own -mulsw
         # (unaligned load/store word) option; retail LBP has them (docs/TOOLCHAIN.md, "Unaligned word access")
         ulsw = {v: "" if v == "432" else " -Wa,-mulsw" for v in g4}
@@ -169,8 +180,9 @@ def gcc_profiles() -> dict:
                                             flags=_gcc_profiles["gcc404x-Os"]["flags"] + " --param max-inline-insns-single=50")
         for o in ("O0", "O1", "O2", "O3", "Os"):
             inl = " --param max-inline-insns-single=450 --param max-inline-insns-auto=90" if o == "Os" else ""
-            _gcc_profiles[f"gcc404xs-{o}"] = dict(_gcc_profiles[f"gcc404x-{o}"],
-                                                  flags=_gcc_profiles[f"gcc404x-{o}"]["flags"] + inl + " -fno-exceptions")
+            for v in ("404x", "404p"):
+                _gcc_profiles[f"gcc{v}s-{o}"] = dict(_gcc_profiles[f"gcc{v}-{o}"],
+                                                     flags=_gcc_profiles[f"gcc{v}-{o}"]["flags"] + inl + " -fno-exceptions")
         assert set(_gcc_profiles) == GCC_PROFILE_NAMES
     return _gcc_profiles
 

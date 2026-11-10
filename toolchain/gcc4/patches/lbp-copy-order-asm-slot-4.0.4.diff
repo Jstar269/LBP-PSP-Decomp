@@ -1,0 +1,118 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+lbp-decomp change C1 for GCC 4.0.4 (after the pspdev patch, lbp-allegrex-tuning.diff, lbp-ins-from-zero-4.0.4.diff
+and lbp-allegrex-xfer-4.0.4.diff): applies with `patch -p1` in gcc-4.0.4/. Two parts, both modelling what the
+retail compiler demonstrably did (docs/TOOLCHAIN.md, Findings log 2026-11-09):
+- block-copy loop order (config/mips/mips.c, mips_block_move_loop): for word-aligned copies, store the first word,
+  advance both pointers, then store the rest at -12/-8/-4 from the new destination pointer. Retail EBOOT has 295 such
+  loops in 186 functions and none in GCC 4.0.4's order (stores first, then the increments).
+- one-instruction asm in delay slots: define_asm_attributes no longer forces can_delay "no" (mips.md), reorg's
+  stop_search_p lets a one-instruction asm with operands move (reorg.c), and an asm is volatile only when written
+  volatile (c-typeck.c, cp/semantics.c, stmt.c), since reorg never moves a volatile insn. Retail fills delay slots
+  with VFPU loads and vector operations (about 120 in branch-likely slots, which the assembler never fills).
+Adopted 2026-11-09 (owner decision via the coordinator) as build psp-gcc-4.0.4c, the gcc404x*/gcc404xs* profiles.
+--- a/gcc/config/mips/mips.c
++++ b/gcc/config/mips/mips.c
+@@ -3009,12 +3009,36 @@
+   label = gen_label_rtx ();
+   emit_label (label);
+ 
+-  /* Emit the loop body.  */
+-  mips_block_move_straight (dest, src, MAX_MOVE_BYTES);
++  /* Emit the loop body.  LBP experiment: for word-aligned copies, store the
++     first word, advance both pointers, then store the rest at negative
++     offsets from the new destination pointer (the retail order).  */
++  if (MEM_ALIGN (src) >= BITS_PER_WORD && MEM_ALIGN (dest) >= BITS_PER_WORD)
++    {
++      rtx regs[MAX_MOVE_REGS];
++      int i;
+ 
+-  /* Move on to the next block.  */
+-  emit_move_insn (src_reg, plus_constant (src_reg, MAX_MOVE_BYTES));
+-  emit_move_insn (dest_reg, plus_constant (dest_reg, MAX_MOVE_BYTES));
++      for (i = 0; i < MAX_MOVE_REGS; i++)
++	{
++	  regs[i] = gen_reg_rtx (word_mode);
++	  emit_move_insn (regs[i], adjust_address (src, word_mode,
++						   i * UNITS_PER_WORD));
++	}
++      emit_move_insn (adjust_address (dest, word_mode, 0), regs[0]);
++      emit_move_insn (src_reg, plus_constant (src_reg, MAX_MOVE_BYTES));
++      emit_move_insn (dest_reg, plus_constant (dest_reg, MAX_MOVE_BYTES));
++      for (i = 1; i < MAX_MOVE_REGS; i++)
++	emit_move_insn (adjust_address (dest, word_mode,
++					i * UNITS_PER_WORD - MAX_MOVE_BYTES),
++			regs[i]);
++    }
++  else
++    {
++      mips_block_move_straight (dest, src, MAX_MOVE_BYTES);
++
++      /* Move on to the next block.  */
++      emit_move_insn (src_reg, plus_constant (src_reg, MAX_MOVE_BYTES));
++      emit_move_insn (dest_reg, plus_constant (dest_reg, MAX_MOVE_BYTES));
++    }
+ 
+   /* Emit the loop condition.  */
+   if (Pmode == DImode)
+--- a/gcc/config/mips/mips.md
++++ b/gcc/config/mips/mips.md
+@@ -325,8 +325,7 @@
+ 
+ ;; Describe a user's asm statement.
+ (define_asm_attributes
+-  [(set_attr "type" "multi")
+-   (set_attr "can_delay" "no")])
++  [(set_attr "type" "multi")])
+ 
+ ;; This mode macro allows 32-bit and 64-bit GPR patterns to be generated
+ ;; from the same template.
+--- a/gcc/reorg.c
++++ b/gcc/reorg.c
+@@ -248,9 +248,11 @@
+     case INSN:
+       /* OK unless it contains a delay slot or is an `asm' insn of some type.
+ 	 We don't know anything about these.  */
++      /* LBP experiment: a one-instruction asm with operands may move like any insn.  */
++      if (asm_noperands (PATTERN (insn)) >= 0)
++	return get_attr_length (insn) != 4;
+       return (GET_CODE (PATTERN (insn)) == SEQUENCE
+-	      || GET_CODE (PATTERN (insn)) == ASM_INPUT
+-	      || asm_noperands (PATTERN (insn)) >= 0);
++	      || GET_CODE (PATTERN (insn)) == ASM_INPUT);
+ 
+     default:
+       gcc_unreachable ();
+--- a/gcc/c-typeck.c
++++ b/gcc/c-typeck.c
+@@ -6540,7 +6540,7 @@
+   /* asm statements without outputs, including simple ones, are treated
+      as volatile.  */
+   ASM_INPUT_P (args) = simple;
+-  ASM_VOLATILE_P (args) = (noutputs == 0);
++  ASM_VOLATILE_P (args) = 0;
+ 
+   return args;
+ }
+--- a/gcc/cp/semantics.c
++++ b/gcc/cp/semantics.c
+@@ -1239,7 +1239,7 @@
+   r = build_stmt (ASM_EXPR, string,
+ 		  output_operands, input_operands,
+ 		  clobbers);
+-  ASM_VOLATILE_P (r) = volatile_p || noutputs == 0;
++  ASM_VOLATILE_P (r) = volatile_p;
+   r = maybe_cleanup_point_expr_void (r);
+   return add_stmt (r);
+ }
+--- a/gcc/stmt.c
++++ b/gcc/stmt.c
+@@ -637,8 +637,7 @@
+   int old_generating_concat_p = generating_concat_p;
+ 
+   /* An ASM with no outputs needs to be treated as volatile, for now.  */
+-  if (noutputs == 0)
+-    vol = 1;
++  /* LBP experiment: only an asm written volatile is volatile.  */
+ 
+   if (! check_operand_nalternatives (outputs, inputs))
+     return;

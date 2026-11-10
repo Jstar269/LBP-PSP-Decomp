@@ -34,6 +34,15 @@ dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333  psp-gcc-4.0.4x
 c1e0e28bc0479600df5a98ea11af6cb0b04720e0a18b3e5579eaf4839a7e3769  psp-gcc-4.0.4x/libexec/gcc/psp/4.0.4/cc1
 165786919b1a23af1a0d7d0e5055c848118f30ca22277c9737a5ce4b67f67d98  psp-gcc-4.0.4x/libexec/gcc/psp/4.0.4/cc1plus
 4ba666d02f4bd8dbbc32eee935f09f60e2e13b4236ad93cbd4cf3a296dbbc992  psp-gcc-4.0.4x/libexec/gcc/psp/4.0.4/collect2
+cb7e832823e96fd92a95b10acebe1d6de1472e179e06f08c5edb4de31f756164  psp-gcc-4.0.4c/bin/psp-c++
+cb7e832823e96fd92a95b10acebe1d6de1472e179e06f08c5edb4de31f756164  psp-gcc-4.0.4c/bin/psp-g++
+dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333  psp-gcc-4.0.4c/bin/psp-gcc
+dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333  psp-gcc-4.0.4c/bin/psp-gcc-4.0.4
+515777249031f0cd8fc40ac568a85846b2d40996fd6c9a7504d36e177fa4c8fa  psp-gcc-4.0.4c/bin/psp-gccbug
+11469a8b98e7ced77859c950947a370865115205b8d3f723961f2cb563022c01  psp-gcc-4.0.4c/bin/psp-gcov
+47105a6ba39b2e755496c822b97eaa6c684546e57b1e7fd6a3b39f6d7d58e5ff  psp-gcc-4.0.4c/libexec/gcc/psp/4.0.4/cc1
+508c96447a0d58b188e13cf9f31090366aeac6d4054f4ea7d19086167354426f  psp-gcc-4.0.4c/libexec/gcc/psp/4.0.4/cc1plus
+4ba666d02f4bd8dbbc32eee935f09f60e2e13b4236ad93cbd4cf3a296dbbc992  psp-gcc-4.0.4c/libexec/gcc/psp/4.0.4/collect2
 74574631dcdbac00ff1167d07da987a977c54c8597136afd4a1c8fd686b1c369  psp-gcc-4.1.0s/bin/psp-c++
 74574631dcdbac00ff1167d07da987a977c54c8597136afd4a1c8fd686b1c369  psp-gcc-4.1.0s/bin/psp-g++
 e26c894b429a272b43dc513e0afc06658f7f95109961982d3f90d4d782f2eb5e  psp-gcc-4.1.0s/bin/psp-gcc

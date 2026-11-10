@@ -95,10 +95,43 @@
   "patches/lbp-allegrex-tuning.diff": "9ee2f12a9c0fdb40900107ecc726115233253b620c650f51b6f82abfae48f540",
   "patches/allegrex-sched.md": "16c9a34dc48b6e5102a2dfdf5b6c805fa2ba090cd84c9fb388c322279e30fe33",
   "patches/lbp-ins-from-zero-4.0.4.diff": "35ca53ca02ada4f50f5d3eb07bdbd6069f9e48c51f4bd86166eb954657a9a901",
-  "patches/lbp-allegrex-xfer-4.0.4.diff": "c033cdbce16b7bcdc64e1c22786b63c998fa5f338d8886f19c7cfd6553f4de4f"
+  "patches/lbp-allegrex-xfer-4.0.4.diff": "c033cdbce16b7bcdc64e1c22786b63c998fa5f338d8886f19c7cfd6553f4de4f",
+  "patches/lbp-copy-order-asm-slot-4.0.4.diff": "8f23439b9cde5c0c99399a0b6db278bf067e6b3fa63f145af5b25d8f2b1617d0"
  },
  "recorded_configuration": "expected_sha256 are the maintainer's installs (the hashes data/toolchain-manifest.json pins), configured with <root> = the maintainer's $HOME/lbp-gcc4, assembler <root>/sony-as and the maintainer's PSPDEV_BIN (pspdev v20261001). Those path strings are compiled into the programs and are not published; the fingerprint does not depend on them.",
  "builds": {
+  "psp-gcc-4.0.4c": {
+   "gcc": "4.0.4",
+   "pspdev_patch": "65aaa94632-gcc-4.0.2.patch (patch -p1 -F3 -N; gcc/version.c hunk 1 rejected)",
+   "project_changes": [
+    "patches/lbp-allegrex-tuning.diff",
+    "patches/allegrex-sched.md",
+    "patches/lbp-ins-from-zero-4.0.4.diff",
+    "patches/lbp-allegrex-xfer-4.0.4.diff",
+    "patches/lbp-copy-order-asm-slot-4.0.4.diff"
+   ],
+   "made_from": "the psp-gcc-4.0.4h work tree with the project changes, cc1/cc1plus rebuilt there; install = the psp-gcc-4.0.4h install with the new cc1/cc1plus (so its configured prefix is the psp-gcc-4.0.4h one); build.sh 4.0.4c (the 4.0.4x recipe plus the C1 diff)",
+   "profiles": [
+    "gcc404xs-Os (PRIMARY since 2026-11-09)",
+    "gcc404xs-O2",
+    "every gcc404x-*/gcc404xs-* profile"
+   ],
+   "version": "psp-gcc (GCC) 4.0.4",
+   "patched_source_sha256": "trees/psp-gcc-4.0.4c.sha256",
+   "expected_sha256": {
+    "bin/psp-c++": "cb7e832823e96fd92a95b10acebe1d6de1472e179e06f08c5edb4de31f756164",
+    "bin/psp-g++": "cb7e832823e96fd92a95b10acebe1d6de1472e179e06f08c5edb4de31f756164",
+    "bin/psp-gcc": "dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333",
+    "bin/psp-gcc-4.0.4": "dbde43dc062c83dccdf72cbdcc7dc758db28b5a0d5d132bc5c7e7e9e60548333",
+    "bin/psp-gccbug": "515777249031f0cd8fc40ac568a85846b2d40996fd6c9a7504d36e177fa4c8fa",
+    "bin/psp-gcov": "11469a8b98e7ced77859c950947a370865115205b8d3f723961f2cb563022c01",
+    "libexec/gcc/psp/4.0.4/cc1": "47105a6ba39b2e755496c822b97eaa6c684546e57b1e7fd6a3b39f6d7d58e5ff",
+    "libexec/gcc/psp/4.0.4/cc1plus": "508c96447a0d58b188e13cf9f31090366aeac6d4054f4ea7d19086167354426f",
+    "libexec/gcc/psp/4.0.4/collect2": "4ba666d02f4bd8dbbc32eee935f09f60e2e13b4236ad93cbd4cf3a296dbbc992"
+   },
+   "fingerprint": "e3bb4de81aa74a8ecda3442d07ffa96e28858075550659ba78891efdd65a158c",
+   "adopted": "2026-11-09, owner decision via the coordinator: C1 = block-copy loop in retail order + one-instruction asm may fill delay slots; built by the kit procedure (h work tree copy, the four diffs with patch -p1 -F0, allegrex-sched.md, TREE_OK, make cc1 cc1plus with the recorded cflags, 3 jobs); cc1/cc1plus byte-identical to the experimental C1 build under which all 6,474 promoted sources were EXACT"
+  },
   "psp-gcc-4.0.4x": {
    "gcc": "4.0.4",
    "pspdev_patch": "65aaa94632-gcc-4.0.2.patch (patch -p1 -F3 -N; gcc/version.c hunk 1 rejected)",
@@ -110,8 +143,7 @@
    ],
    "made_from": "the psp-gcc-4.0.4h work tree with the project changes, cc1/cc1plus rebuilt there; install = the psp-gcc-4.0.4h install with the new cc1/cc1plus (so its configured prefix is the psp-gcc-4.0.4h one)",
    "profiles": [
-    "gcc404xs-Os (PRIMARY)",
-    "gcc404xs-O2"
+    "gcc404p-* and gcc404ps-* (PRIMARY until 2026-11-09; kept so the migration can be undone and any proof re-run under it)"
    ],
    "version": "psp-gcc (GCC) 4.0.4",
    "patched_source_sha256": "trees/psp-gcc-4.0.4x.sha256",

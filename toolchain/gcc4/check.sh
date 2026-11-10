@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Compare installed GCC 4.x PSP compilers with the recorded hashes.
 #
-#   sh check.sh [BUILD...]        BUILD = 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s (default: those installed)
+#   sh check.sh [BUILD...]        BUILD = 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s (default: those installed)
 #
 # 1. Binary SHA-256 of every installed program against expected-sha256.txt. The recorded binaries embed the
 #    maintainer's configured paths (prefix, assembler, linker; README.md "What the hashes depend on"), so they are
@@ -15,7 +15,7 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${LBP_GCC4_ROOT:-$HOME/lbp-gcc4}
 if [ $# -eq 0 ]; then
-  for b in 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.1.0s; do [ -x "$ROOT/psp-gcc-$b/bin/psp-gcc" ] && set -- "$@" "$b"; done
+  for b in 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s; do [ -x "$ROOT/psp-gcc-$b/bin/psp-gcc" ] && set -- "$@" "$b"; done
 fi
 [ $# -gt 0 ] || { echo "no psp-gcc-<build> under $ROOT" >&2; exit 2; }
 bad=0
