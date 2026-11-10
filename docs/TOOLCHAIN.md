@@ -234,6 +234,14 @@ The GCC 4 profiles that assemble with `sony-as` (all except `gcc432-*`, which us
 `-Wa,-mulsw`. migrate-toolchain re-proved all 5,490 accepted proofs EXACT under it (no output changed: a source
 that held one of the four could not assemble before).
 
+## Adopting a compiler change (owner decision 2026-11-10)
+
+Each compiler change is checked on a holdout sample before adoption, in addition to the full regression. Draw the
+sample with a recorded seed before the change is developed (about 200 publishable functions, matched and unmatched),
+keep it out of development and measurement, and report its EXACT count beside the full regression. Adopt only if
+neither loses an EXACT. A change that fits fewer than a handful of functions goes to the coordinator before adoption.
+psp-gcc-4.0.4c (C1, 2026-11-09) was adopted on the full regression alone, before this rule.
+
 ## Findings log
 
 Append one dated line per verified finding, naming the function address and the evidence.

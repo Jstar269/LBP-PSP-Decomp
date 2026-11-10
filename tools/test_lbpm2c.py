@@ -48,6 +48,13 @@ class Conversion(unittest.TestCase):
         self.assertIn(".L0000010c:\n/* 0000010C */ jr $ra", s)
 
 
+class Publishable(unittest.TestCase):
+    def test_sdk_region_is_left_out_and_game_kept(self):
+        pub = X.publishable_filter("EBOOT.BIN")
+        self.assertTrue(pub(0x08835920))       # game region
+        self.assertFalse(pub(0x08aab2e4))      # first address of the sony-sdk region
+
+
 class PlainC(unittest.TestCase):
     def test_field_macro_nested(self):
         t = "M2C_FIELD(M2C_FIELD(arg0, void **, 4), s32 *, 0x3C) = 0;"

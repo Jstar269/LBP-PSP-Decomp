@@ -3,6 +3,7 @@
 
     LBP_M2C=<path to m2c.py> python tools/lbpm2c.py --tag m1 [--module EBOOT.BIN] [--count 200] [--min-size 12]
                                                       [--max-size N] [--skip N] [--calls] [--cc PROFILE]
+                                                      [--publishable] [--exclude-tried]
 
 m2c (matt-kempster/m2c, GPL-3.0) is not shipped and not installed by this tool: point LBP_M2C at a checkout's m2c.py
 (the trial's pin is recorded in toolchain/gcc4/PROVENANCE.json, user_supplied.m2c). Writes try/m2c-<tag>/:
@@ -76,16 +77,26 @@ def covered(module: str) -> set[int]:
     return out
 
 
-def select(module: str, count: int, min_size: int, max_size: int, skip: int, calls: bool) -> list[dict]:
+def publishable_filter(module: str):
+    """A predicate: True when the lbporigin region of a start address is one lbppublish publishes."""
+    import lbporigin
+    from lbppublish import EXCLUDED_CLASSES
+    regions = lbporigin.load_regions()
+    return lambda a: lbporigin.region_class(regions, module, a) not in EXCLUDED_CLASSES
+
+
+def select(module: str, count: int, min_size: int, max_size: int, skip: int, calls: bool,
+           publishable: bool = False, exclude: set[int] = frozenset()) -> list[dict]:
     data, seg = M.module_bytes({}, module)
     base, off = seg["start"], seg["file_offset"]
     done = covered(module)
     snc_file = M.ROOT / "try" / "snc-functions.txt"
     snc = {int(x, 16) for x in snc_file.read_text().split()} if snc_file.exists() else set()
+    pub = publishable_filter(module) if publishable else (lambda a: True)
     rows = []
     for a, b in inventory(module).items():
         n = b - a
-        if a in done or a in snc or n < min_size or (max_size and n > max_size):
+        if a in done or a in snc or a in exclude or n < min_size or (max_size and n > max_size) or not pub(a):
             continue
         raw = data[off + a - base: off + b - base]
         if len(raw) != n:
@@ -217,6 +228,9 @@ def main() -> int:
     ap.add_argument("--skip", type=int, default=0, help="skip the first N selected functions")
     ap.add_argument("--calls", action="store_true", help="do not put leaves first")
     ap.add_argument("--cc", default="", help="cc= for the drafts (default: none, the primary profile)")
+    ap.add_argument("--publishable", action="store_true",
+                    help="select only functions in lbporigin regions that lbppublish publishes (not sony-sdk, startup, ...)")
+    ap.add_argument("--exclude-tried", action="store_true", help="skip functions already in any try/m2c-*/m2c.json")
     args = ap.parse_args()
     m2c = os.environ.get("LBP_M2C")
     if not m2c or not Path(m2c).is_file():
@@ -224,7 +238,11 @@ def main() -> int:
     out = M.ROOT / "try" / f"m2c-{args.tag}"
     (out / "drafts").mkdir(parents=True, exist_ok=True)
     (out / "bin").mkdir(exist_ok=True)
-    sel = select(args.module, args.count, args.min_size, args.max_size, args.skip, args.calls)
+    tried = set()
+    if args.exclude_tried:
+        for f in (M.ROOT / "try").glob("m2c-*/m2c.json"):
+            tried |= {int(r["start"], 16) for r in json.loads(f.read_text(encoding="utf-8"))}
+    sel = select(args.module, args.count, args.min_size, args.max_size, args.skip, args.calls, args.publishable, tried)
     for r in sel:
         (out / "bin" / f"{r['start']:08x}.bin").write_bytes(r["raw"])
     script = (f'cd "{M.to_wsl(out / "bin")}" && for f in *.bin; do a=${{f%.bin}}; '
