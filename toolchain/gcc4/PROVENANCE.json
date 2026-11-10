@@ -79,6 +79,18 @@
     "psp-objdump": "bb9cfc15da96a8a2dfd4b6c0903e6b15bc746320f6bf4c7694489470f1bd161b"
    },
    "shipped": false
+  },
+  "m2c": {
+   "what": "m2c, MIPS/PowerPC assembly to C decompiler (draft source for a bounded trial; not a compiler, not part of any build)",
+   "from": "https://github.com/matt-kempster/m2c (git clone, default branch)",
+   "commit": "c632946b8cfbe8fce442b522dba92dfa72f1f317",
+   "commit_date": "2026-10-22T23:54:00+02:00",
+   "tree_sha1": "3132eca24e32ac8b1f368d0cb7fb8bb85439380b",
+   "licence": "GPL-3.0",
+   "location": "a local clone outside the repositories; tools/lbpm2c.py finds its m2c.py through LBP_M2C",
+   "dependencies": "none installed: m2c vendors its pycparser (m2c_pycparser); graphviz is used only by its optional --visualize output",
+   "approved": "owner, 2026-11-09, via the coordinator (bounded m2c draft trial)",
+   "shipped": false
   }
  },
  "host": {

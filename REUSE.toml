@@ -306,6 +306,8 @@ path = [
   "src/eboot/function_08b882d0.c",
   "src/eboot/lane13a_08b8d018.c",
   "src/eboot/lane13a_08b97ce8.c",
+  "src/eboot/m2c_08b8df10.c",
+  "src/eboot/m2c_08b989d4.c",
   "src/eboot/near_08b8dd54.c",
   "src/eboot/near_08b912fc.c",
   "src/eboot/read_encoded_value_08b8d144.c",
@@ -349,6 +351,7 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 # zlib
 [[annotations]]
 path = [
+  "src/eboot/inflateCopy_08ad56e0.c",
   "src/eboot/zlib_inflateEnd.c",
   "src/eboot/zlib_inflateGetHeader.c",
   "src/eboot/zlib_inflateInit2_.c",

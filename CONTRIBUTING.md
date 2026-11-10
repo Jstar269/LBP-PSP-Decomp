@@ -66,8 +66,9 @@ These hold for every file, commit, pull request, issue and comment, here and any
   compilers. The ignore rules already exclude binaries and key files; keep it that way.
 - Do not edit existing lines of `symbols/` (appending is allowed, see below), and do not edit `tools/` as part of a
   matching change.
-- The tools that write into `src/` (`lbpgen`, `lbpclone`, `lbpperm`, `lbpnewlib`) and the one that builds
-  batches for matching agents (`lbpqueue`) are run deliberately by whoever runs the campaign, not casually while
+- The tools that write into `src/` (`lbpgen`, `lbpclone`, `lbpnewlib`), the permuter (`lbpperm`, which only
+  proposes: its exact results go to `try/perm-<tag>/exact/` and need `lbppromote` like any source) and the one that
+  builds batches for matching agents (`lbpqueue`) are run deliberately by whoever runs the campaign, not casually while
   matching a function.
 - Keep scratch work out of the tracked tree: use `try/<your-name>/` (gitignored). Build products go to
   `build/<module>/<dir>__<stem>__<digest>` (`tools/lbpmatch.py` `build_key`: the digest comes from the source's path,
@@ -151,6 +152,7 @@ source that started from a generated candidate names the generator tag.
 - Derived from a generated candidate with small corrections:
   `/* Ghidra pseudocode (lbpgen.py tag <tag>) corrected by hand: <what you changed>; exact match verified; names and types await human review. */`
 - The tools write the other kinds themselves: `Mechanical translation of Ghidra pseudocode (lbpgen.py tag X)`,
+  `Mechanical translation of the disassembly (m2c <commit>, lbpm2c.py tag X)`,
   `Clone of src/... (lbpclone.py tag X)` and
   `Library source: newlib <release> <dir>/<file>.c function <name>, ...`; the zlib sources name their release first
   (`zlib 1.2.3 (zlib.net, <archive> md5 <digest>), <file>.c; ...`).

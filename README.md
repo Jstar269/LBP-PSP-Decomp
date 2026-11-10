@@ -37,9 +37,9 @@ the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), whic
 
 | | Progress | What it counts |
 |---|---|---|
-| **Code matched** (T1) | **19.2%** | 549,208 of the 2,860,624 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
-| **Functions matched** (T1) | **44.5%** | 5,216 of the 11,712 functions of the public scope. |
-| **Built from source** (T2) | not measured | No whole-module build of the current accepted proofs yet (`python tools/lbpbuild.py`). |
+| **Code matched** (T1) | **19.3%** | 553,416 of the 2,861,108 code bytes of the public scope come from C or C++ that compiles, function by function, to the game's exact bytes. |
+| **Functions matched** (T1) | **45.3%** | 5,305 of the 11,713 functions of the public scope. |
+| **Built from source** (T2) | **19.3%** | The share of that code which the whole executable, rebuilt in place from this source, reproduces byte for byte; the rebuilt file is identical to the original. |
 
 Code and functions matched are the figures the trackers ([bytematch.dev](https://bytematch.dev/Jstar269/lbp-psp-decomp), [recomp.fyi](https://recomp.fyi)) show. The public scope is the game's own code and the open-source libraries it links; Sony SDK code the game links is not published and not counted here, but stays in the project's strict finish line ([`docs/COMPLETION.md`](docs/COMPLETION.md)). Measured from the maintainer's private ledger of accepted proofs of 2026-11-10 by `tools/lbppublish.py`, which needs that ledger.
 
@@ -80,13 +80,13 @@ output of the game to web tools such as decomp.me, pastebins or public issues.
 
 <!-- lbpfigures:begin readme-progress -->
 
-**5,216 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-10 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
+**5,305 functions** matched exactly in isolation (T1), measured from the maintainer's private ledger of accepted proofs of 2026-11-10 by `tools/lbppublish.py`, which needs that ledger and counted in code bytes of the public scope:
 
 | Module | Matched / functions | Matched / code bytes | Share of bytes |
 |---|---|---|---|
-| `EBOOT.BIN` | 5,216 / 11,712 | 549,208 / 2,860,624 | 19.199 % |
+| `EBOOT.BIN` | 5,305 / 11,713 | 553,416 / 2,861,108 | 19.343 % |
 
-`EBOOT.BIN` built from source (T2): not measured (no whole-module build report: python tools/lbpbuild.py).
+`EBOOT.BIN` built from source (T2): 553,416 code bytes of the public scope (19.343 %), and 1,456 data bytes; the rebuilt file is byte-identical to the original.
 
 <!-- lbpfigures:end -->
 

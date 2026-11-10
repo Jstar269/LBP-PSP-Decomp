@@ -36,6 +36,7 @@ NOTE_KINDS = (("clone", re.compile(r"Clone of src/\S+ \(lbpclone\.py tag [\w./-]
               ("xclone", re.compile(r"Clone of hst-decomp src/\S+ \(lbpxclone\.py tag [\w./-]+\)")),
               ("corrected", re.compile(r"Ghidra pseudocode \(lbpgen\.py tag [^)]+\) corrected by hand")),
               ("generated", re.compile(r"Mechanical translation of Ghidra pseudocode \(lbpgen\.py tag [\w./-]+\)")),
+              ("m2c", re.compile(r"Mechanical translation of the disassembly \(m2c [0-9a-f]{7,40}, lbpm2c\.py tag [\w./-]+\)")),
               ("library", re.compile(r"Library source: newlib |^\s*zlib \d+\.\d+\.\d+ \(zlib\.net, ")),
               ("template", re.compile(r"[^.;]*\(template instance, lbptmpl\.py tag [\w./-]+\)")),
               ("hand", re.compile(r"Hand-written reconstruction\b")))
