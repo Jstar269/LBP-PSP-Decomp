@@ -491,6 +491,64 @@ class SourceMutations(GateCase):
         self.assertCandidateRefused(self.sb.promote(rel), rel, "gate")
 
 
+THUNK_D1 = "src/eboot/obj_dtor_thunk_0886c11c.cpp"     # GCC 4.0.4x C++, -Wa,-g: thunk + D1 in .gnu.linkonce.t
+THUNK_D0 = "src/eboot/obj_deldtor_thunk_0886c1b8.cpp"  # the same file's thunk + deleting destructor (D0)
+
+
+class ThunkPlacement(GateCase):
+    """A this-adjusting thunk and the inline destructor after it, in GCC's .gnu.linkonce.t.<D1> section, linked at the
+    thunk's retail address; the class's vtable placed at its symbol-map address and not compared (2026-11-21)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.copy(THUNK_D1, THUNK_D0)
+        r = self.sb.gate("migrate-toolchain", "--reason", "test: thunk sources use gcc404xsg-Os")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("migration scope: added", r.stdout)
+        self.before = self.sb.state()
+
+    def test_thunk_and_destructor_are_promoted(self) -> None:
+        r = self.sb.promote(THUNK_D1, THUNK_D0)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        proofs = {p["source"]: p for p in self.sb.proofs()}
+        for rel, start, size in ((THUNK_D1, "0x0886c11c", 156), (THUNK_D0, "0x0886c1b8", 164)):
+            p = proofs[rel]
+            self.assertEqual((p["cc"], p["start"]), ("gcc404xsg-Os", start))
+            self.assertEqual(list(p["compared"]), [".text"])                     # the vtable is not claimed
+            self.assertEqual((p["compared"][".text"]["addr"], p["compared"][".text"]["size"]), (start, size))
+            self.assertIn(["_ZTV12Obj_0886c09c", "0x08bb0228"], p["deps"]["placed_symbols"])
+            self.assertEqual(p["deps"]["placed_symbols"], [["_ZTV12Obj_0886c09c", "0x08bb0228"]])
+            self.assertIn(["_ZTV12Mid_08849d04", "0x08baec58"], p["deps"]["symbols"])   # not emitted here: external
+        self.assertIn(["_ZdlPv", "0x08a9e0cc"], proofs[THUNK_D0]["deps"]["symbols"])
+        self.assertEqual(self.sb.check().returncode, 0, self.sb.check().stdout)
+
+    def test_thunk_without_the_assembler_g_is_refused(self) -> None:
+        rel = "src/eboot/obj_dtor_thunk_nog_0886c11c.cpp"
+        self.sb.write(rel, self.sb.text(THUNK_D1).replace("cc=gcc404xsg-Os", "cc=gcc404xs-Os", 1))
+        # the thunk is `j; addiu` (8 bytes) there: the claimed range runs past its section, nothing places it
+        self.assertCandidateRefused(self.sb.promote(rel), rel, "MISSING_SYMBOLS|MISMATCH")
+
+    def test_moved_vtable_is_refused(self) -> None:
+        self.sb.edit("symbols/EBOOT.BIN.txt", "_ZTV12Obj_0886c09c = 0x08bb0228;", "_ZTV12Obj_0886c09c = 0x08bb0230;")
+        self.assertCandidateRefused(self.sb.promote(THUNK_D1), THUNK_D1, "MISMATCH")
+
+    def test_unmapped_vtable_is_refused(self) -> None:
+        self.sb.edit("symbols/EBOOT.BIN.txt", "_ZTV12Obj_0886c09c = 0x08bb0228;", "")
+        self.assertCandidateRefused(self.sb.promote(THUNK_D1), THUNK_D1, "UNPLACED_SECTION")
+
+    def test_claim_of_the_body_without_its_thunk_is_refused(self) -> None:
+        rel = "src/eboot/obj_dtor_body_0886c128.cpp"
+        self.sb.write(rel, self.sb.text(THUNK_D1).replace(
+            "start=0x0886c11c end=0x0886c1b8 symbol=_ZThn12_N12Obj_0886c09cD1Ev",
+            "start=0x0886c128 end=0x0886c1b8 symbol=_ZN12Obj_0886c09cD1Ev", 1))
+        self.assertCandidateRefused(self.sb.promote(rel), rel, "partial-function claim")
+
+    def test_destructor_body_changed_is_refused(self) -> None:
+        rel = "src/eboot/obj_dtor_thunk_elems_0886c11c.cpp"
+        self.sb.write(rel, self.sb.text(THUNK_D1).replace("Elem_0886b790 elems[16];", "Elem_0886b790 elems[15];", 1))
+        self.assertCandidateRefused(self.sb.promote(rel), rel, "MISMATCH")
+
+
 class SymbolMutations(GateCase):
     def test_override_an_address_name(self) -> None:
         with (self.dir / "symbols" / "EBOOT.BIN.txt").open("a", encoding="utf-8", newline="\n") as fh:

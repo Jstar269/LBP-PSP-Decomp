@@ -8,23 +8,14 @@
    "startup": 1244,
    "unattributed": 5716
   },
-  "ledger_date": "2026-11-10",
+  "ledger_date": "2026-11-22",
   "public_scope_bytes": 2861108,
   "public_scope_functions": 11713,
-  "public_t1_bytes": 554352,
-  "public_t1_functions": 5319,
-  "public_t1_percent": 19.375,
+  "public_t1_bytes": 620052,
+  "public_t1_functions": 5731,
+  "public_t1_percent": 21.672,
   "strict_scope_bytes": 3827976,
-  "t2": {
-   "image_bytes": 4085872,
-   "image_identical": true,
-   "image_t2_bytes": 555808,
-   "image_t2_percent": 13.603,
-   "method": "tools/lbpbuild.py public build: bytes the compiled objects of published accepted sources produce in the whole-module image, which is byte-identical to the retail module; scaffolding never counts",
-   "public_t2_bytes": 554352,
-   "public_t2_data_bytes": 1456,
-   "public_t2_percent": 19.375
-  },
+  "t2": "not measured (no whole-module build report: python tools/lbpbuild.py)",
   "t3": "not measured"
  }
 }

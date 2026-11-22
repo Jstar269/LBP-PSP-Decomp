@@ -80,7 +80,7 @@ UNIT_MAPS = ("data/translation-units.json",)
 DISC_DERIVED = ("data/functions-pspnet_ap_dialog_dummy.prx.txt", "data/cceval-sample.json", "data/target-manifest.json", "data/toolchain-manifest.json",
                 "data/accepted-ledger.jsonl", "data/accepted-journal.jsonl")
 SYMBOL_MAPS = ("symbols/",)
-PRIVATE_PATHS = ("docs/HANDOFF.md", "docs/LANE-BRIEF.md", "docs/LANE-NOTES.md", "AGENTS.md",
+PRIVATE_PATHS = ("docs/HANDOFF.md", "docs/LANE-BRIEF.md", "docs/LANE-NOTES.md", "docs/LANE-60FPS.md", "AGENTS.md",
                  "tools/lbplane.py", "tools/test_lbplane.py",
                  "docs/public/")
 # public versions of files whose private version states this tree's private rules: source -> published path

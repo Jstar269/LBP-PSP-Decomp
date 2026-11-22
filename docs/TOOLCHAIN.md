@@ -234,6 +234,48 @@ The GCC 4 profiles that assemble with `sony-as` (all except `gcc432-*`, which us
 `-Wa,-mulsw`. migrate-toolchain re-proved all 5,490 accepted proofs EXACT under it (no output changed: a source
 that held one of the four could not assemble before).
 
+## Thunks and the assembler's -g (profile `gcc404xsg-*`, ADOPTED 2026-11-21: merged and migrated, 4f2a64d)
+
+284 inventory functions (33,464 bytes) begin with a C++ this-adjusting thunk, `addiu a0,a0,-N; j f; nop`: the vtable
+entry of a virtual function reached through a base class at +N. 43 ranges are the thunk alone (12 bytes); 241 are the
+thunk followed by the function it jumps to (`j` to the next word).
+
+Two facts about GCC 4.0.4 (measured with the 4.0.4x build, `try/thunk/` of the lane worktree):
+
+1. **Thunk shape.** GCC prints a thunk without scheduling it, in `.set reorder` mode: `addiu $4,$4,-12; j f`. The
+   binutils 2.14+allegrex assembler then fills the delay slot itself and emits `j f; addiu a0,a0,-12` (8 bytes);
+   every LBP thunk has `addiu; j; nop` (12 bytes). The assembler stops filling delay slots when given `-g`
+   (`mips_debug` 2 sets `mips_optimize` 1), which is what `gcc -g` passes it. `-Wa,-O0` does not (binutils 2.14
+   parses `-O0` as `-O2`; only `-O00` reaches `mips_optimize` 1). GCC 4.0.2x, 4.1.0s, 4.1.2s, 4.2.4s and 4.3.2 emit
+   the same 8-byte thunk with the default assembler options: the shape is the assembler's, not the compiler version's.
+2. **Where the thunk goes.** For an inline or implicit destructor (emitted because the class's vtable is: its key
+   function is defined in the file), GCC puts the D1 or D0 body in `.gnu.linkonce.t.<D1|D0>` and its thunk in the same
+   section, just before it: exactly retail's `thunk + body` range. For an out-of-line virtual function, the thunk goes
+   to its own section `.gnu.linkonce.t._ZThn<N>_...` (comdat, because `-fweak`), while the function stays in `.text`:
+   not adjacent as in retail. `-fno-weak` would put that thunk in `.text` before its function, but it breaks the
+   linkonce local-static matches (0x08805418 13 words off, 0x08870308 56 words off): retail is not `-fno-weak`.
+
+**Profile `gcc404xsg-<O>`** = `gcc404xs-<O>` + `-Wa,-g` (tools/lbpmatch.py). `-Wa,-g` instead of `-g`: GCC's own debug
+sections record the compile directory, which differs between the matcher's and the promoter's compile, so the
+object-identity check would refuse every source. Neutrality sample (`try/thunk/gneutral.py`, seed 20261121): 602
+sources of `src/` that use `gcc404xs-*` compiled under both profiles; 598 objects byte-identical; two differ only in
+GCC's random `_GLOBAL__I_` names (as any two compiles do), and the two inline-VFPU-asm sources of the sample
+(0x08805150, 0x08805174) differ: GCC emits a function holding inline asm in reorder mode, and retail's `jr ra` there
+HAS the last VFPU store in its delay slot (the assembler filled it). So `-g` was not used for every object of the
+game: it is a per-object property like `-O2`, and `gcc404xsg-*` is a separate profile, not a change of the primary.
+
+**Matcher and gate** (tools/lbpmatch.py, tools/lbppromote.py): a header symbol defined in a `.gnu.linkonce.t.*`
+section of a GCC object is laid out as ld's default script does (code inputs in file order, aligned), and `.text` is
+linked so that the symbol lands at its retail address (the promoter already checked this layout); the compared range
+is exactly the header's. A C++ vtable with vague linkage (`.gnu.linkonce.r._ZTV*`) that the compared code refers to
+(the vptr stores) is placed at its symbol-map address like any linkonce object, but its contents are not compared or
+claimed: they are other functions' addresses (and the typeinfo pointer, null in retail: the game was built with
+`-fno-rtti`, which the profiles do not pass). Everything else stays as before: other linkonce data are compared,
+`helpers=` stays mwcc-only, and a range must start and end on inventory boundaries.
+
+Exemplars: `src/eboot/obj_dtor_thunk_0886c11c.cpp`, `obj_deldtor_thunk_0886c1b8.cpp`,
+`obj_deldtor_thunk_08aa6da0.cpp`, `obj_dtor_thunk_08aa6e04.cpp` (docs/LANE-NOTES.md 2026-11-21 has the recipe).
+
 ## Adopting a compiler change (owner decision 2026-11-10)
 
 Each compiler change is checked on a holdout sample before adoption, in addition to the full regression. Draw the
@@ -258,6 +300,7 @@ Append one dated line per verified finding, naming the function address and the 
 - 2026-10-27 ~19:30Z (owner decision): `gcc404xs-*` is LBP's PRIMARY profile (gcc404x + `-fno-exceptions` + GCC's default inline limits at `-Os`); `gcc404xi-Os` stays defined as the fallback; `gcc402x-*`, `gcc402t-*`, `gcc410-*` and `gcc171-*` stay secondary. Same decision: lbpmatch places GCC 4.0's vague-linkage data sections (`.gnu.linkonce.{b,sb,d,s,r}.<symbol>`: the local static of an inline function, a template's static data member) at the symbol's address from `symbols/<module>.txt`. Such objects are weak, and a weak object's load may trap, so the scheduler does not move it speculatively: this is what keeps the heap-pointer load of `_Rb_tree::_M_insert` (0x08805418) below the insert_left branches in retail.
 - 2026-10-28 (ins from $zero, ADOPTED): the fourth Allegrex change in the 4.0.4x build (an `and` with a contiguous clear mask that andi cannot encode -> `ins rd,$zero,pos,len`): fixed sample 295 EXACT / 2,827 words left (291 / 2,942 before; low-run-only variant 293 / 2,844); all 1,172 sources built by 4.0.4x EXACT under it; zlib `inflateSync` 0x08ad59dc EXACT from the stock source. Section "ins from $zero".
 - 2026-10-29 (unaligned word access, ADOPTED): the Sony kit assembler rejects lwl/lwr/swl/swr on `-march=allegrex` unless given its own `-mulsw` option (default `-mno-ulsw`); GCC 4 profiles now pass `-Wa,-mulsw`; migrate-toolchain re-proved all 5,490 proofs EXACT. First lanes on the 288 affected functions: lbp10a 14 EXACT of 21 attempted (stream/chunk writers via `__builtin_memcpy(p, &v, 4)`, packed-struct assignment), lbp10c 6 of 15 (libgcc `read_encoded_value` 0x08b8d144 from the stock packed union). Open: retail block copies with a runtime `(src|dst)&3` dispatch (0x08b1c914, 0x08893d40, 0x08b47140) that GCC 4.0.4 never emits. Section "Unaligned word access".
+- 2026-11-21 (thunks, ADOPTED 2026-11-21 after migrate-toolchain, 4f2a64d): LBP's 284 thunk ranges need the assembler with `-g` (no delay-slot filling in reorder mode: `addiu; j; nop`) and the destructor's `.gnu.linkonce.t` section laid out at the thunk's address; new profile `gcc404xsg-*` (= gcc404xs + `-Wa,-g`), matcher/promoter support for linkonce.t targets and address-only C++ vtables. 4 EXACT (0x0886c11c, 0x0886c1b8, 0x08aa6da0, 0x08aa6e04), each promoted in the test sandbox. `-Wa,-g` leaves 598 of 602 sampled objects identical; it changes inline-VFPU-asm functions, which retail assembled WITH delay-slot filling, so it is per object, not global. Retail vtables have a null typeinfo slot (`-fno-rtti`). Out-of-line virtual functions' thunks (98 thunk+method ranges, 43 thunk-only) are not adjacent to their function in GCC 4.0.4's output (own comdat section); `-fno-weak` would fix that but breaks the linkonce local-static matches. Section "Thunks and the assembler's -g".
 - 2026-11-04 (lbp-decomp lane, OPEN, needs a measured toolchain decision): retail has no `mtc1` hazard. It puts `mtc1 zero,$fN` in a `jr ra` or branch delay slot (`return 0.0f;` 0x08a09cf0-0x08a09d10 is `jr ra; mtc1 zero,$f0`, 2 words; 0x08a090f8 `beqz; mtc1`) and compares immediately after it (`mtc1 zero,$f0; c.lt.s $f0,$f1` in 0x088b68a4, 0x08a145ac, 0x08a14a18). gcc404xs inserts a nop or reorders in every one of these, so `return 0.0f;` is 3 words. Same class as 0x088c4f14 and 0x088fb3e8 (lbp4a/lbp6b). The Allegrex FPU interlocks `mtc1`; a fifth Allegrex change (no `mtc1`/`mfc1` delay) is the candidate, to be measured on the fixed sample.
 - 2026-11-04 (lbp-decomp lane, OPEN): in 0x088c58b0 and 0x088e99e0 (3 words each, everything else EXACT) retail schedules `mov.s $f12,$f20` before the `lui`/`lw` of the pointer argument of the same call (`jal 0x08960ad0` with the `lw` in the delay slot); gcc404xs puts the load first and `mov.s` in the slot. Not changed by argument order, `int` padding or gcc402x/gcc402t/gcc410. Probably the FP-move latency of the scheduling model.
 - 2026-11-04 (lbp-decomp lane, OPEN, first inline-VFPU trial): retail puts VFPU instructions in delay slots (0x08a10d50 is `jr ra; lv.q C000.q,16(a0)`, 2 words; 0x089ecf0c `lui; jr ra; lv.q`). GCC never fills a delay slot with an `asm` statement, so `__asm__("lv.q C000, %0" : : "m"(...))` builds `lv.q; jr ra; nop` at gcc404xs-O2 and -Os (volatile or not, `"m"` or `"r"`). Either the original compiler knew VFPU instructions as real insns, or its reorg accepted single-instruction asm. Until the kit does one of these, functions that end in a VFPU delay slot cannot be EXACT with inline asm.

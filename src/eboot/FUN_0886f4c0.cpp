@@ -1,42 +1,41 @@
 /* LBPMATCH module=EBOOT.BIN start=0x0886f4c0 end=0x0886f568 symbol=FUN_0886f4c0 lang=c++ */
-/* Hand-written reconstruction from the disassembly (lane lbp17a, Codex GPT-6); exact match verified; names and types await human review. */
-struct NewObject {
-  virtual void method0();
-  virtual void method1();
-  virtual void method2(void *);
-  virtual void method3();
-  virtual void method4();
-  virtual void method5();
-  virtual void method6();
-  virtual void method7();
-  virtual void method8();
-  int reserved[2];
-  unsigned int field_c;
-  unsigned int field_10;
+/* Hand-written reconstruction from the disassembly (lane api-sonnet-20261121, Claude Sonnet 5.5); exact match verified; names and types await human review. */
+extern "C" void *FUN_08a9e838(unsigned n);
+extern "C" void FUN_08954bb4(void *p);
+extern "C" int FUN_08882440(int k);
+extern "C" int FUN_08882458(int k);
+struct Obj {
+  char pad[8];
+  int f12; /* +0x0c */
+  int f16; /* +0x10 */
+  virtual void v0();
+  virtual void v1();
+  virtual void v2(int a);
+  virtual void v3();
+  virtual void v4();
+  virtual void v5();
+  virtual void v6();
+  virtual void v7();
+  virtual void v8();
 };
-
 struct Self {
   char pad[0x88];
-  NewObject *object;
-  char gap[12];
-  int mode;
+  Obj *obj;  /* +0x88 */
+  char pad2[0x0c];
+  int kind;  /* +0x98 */
 };
-
-extern "C" void *FUN_08a9e838(unsigned int);
-extern "C" void FUN_08954bb4(NewObject *);
-extern "C" unsigned int FUN_08882440(int);
-extern "C" unsigned int FUN_08882458(int);
-
-extern "C" void FUN_0886f4c0(void *param_1, void *param_2, Self *self)
+extern "C" void FUN_0886f4c0(void *unused, int arg, Self *self)
 {
-  NewObject *object = (NewObject *)FUN_08a9e838(0x14);
-  FUN_08954bb4(object);
-  self->object = object;
-  int mode = self->mode;
-  if (mode != 3) {
-    object->field_c = FUN_08882440(mode);
-    self->object->field_10 = FUN_08882458(mode);
+  Obj *o = (Obj *)FUN_08a9e838(20);
+  FUN_08954bb4(o);
+  int k = self->kind;
+  self->obj = o;
+  if (k != 3) {
+    int a = FUN_08882440(k);
+    Obj *p = self->obj;
+    o->f12 = a;
+    p->f16 = FUN_08882458(k);
   }
-  self->object->method2(param_2);
-  self->object->method8();
+  self->obj->v2(arg);
+  self->obj->v8();
 }

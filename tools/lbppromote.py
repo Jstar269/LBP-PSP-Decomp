@@ -37,7 +37,8 @@ of an earlier build can be read):
      is the object's code with only relocation fields filled in; the claimed range lies inside the object's code; the
      bytes equal the retail bytes, read through the module's own program headers from the image the target lock pins;
      the same for each placed .rodata/.data/.sdata (header keys) and each `.gnu.linkonce` data object the matcher
-     placed (at its symbol-map address; every one the compared code refers to must be placed); a placed .bss/.sbss is
+     placed (at its symbol-map address; every one the compared code refers to must be placed; a C++ vtable of a GCC
+     C++ source is placed there but not compared: lbpmatch.is_cxx_vtable_section); a placed .bss/.sbss is
      linked at its header address; the link script defines exactly the object's undefined names, each at the address
      the symbol map (or its address name) gives, with placeholders only for names the compared code does not
      reference. A source with same-file helpers (header `helpers=`, an mwcc profile) is checked function by function:
@@ -520,7 +521,9 @@ class Run:
         it at the symbol's address from the symbol map). Every placed output section is matched to the one object input
         of its size whose symbol the map gives that address; its linked bytes are the input's with only relocation
         fields filled in and equal retail (recorded in `compared` as `linkonce:<section>`); every linkonce object the
-        compared code refers to must be one of them. Returns [symbol, address] for the dependency record."""
+        compared code refers to must be one of them. The one exception to the retail comparison is a C++ vtable of a
+        GCC C++ source (lbpmatch.is_cxx_vtable_section): the compared code holds only its address, so it is bound to its
+        symbol-map address and not compared or claimed. Returns [symbol, address] for the dependency record."""
         inputs = [s for s in o.sections if s.size and (m := LINKONCE_DATA.fullmatch(s.name))]
         outs = [s for s in ln.sections if PLACED_LINKONCE.fullmatch(s.name)]
         placed: dict[int, tuple[str, int]] = {}
@@ -539,6 +542,10 @@ class Run:
             bad = P.masked_difference(o.contents(sec), lb, o.relocations(sec))
             if bad is not None:
                 raise ProofError("relocation", f"the linked {sec.name} differs from the object outside relocation fields")
+            if M.is_cxx_vtable_section(sec.name, h):
+                # a C++ vtable of a GCC C++ source: bound to its symbol-map address (recorded in the dependencies),
+                # its contents (other functions' addresses, the typeinfo pointer) neither compared nor claimed
+                continue
             if lb != P.image_range(h["module"], out.addr, out.addr + len(lb), self.target, executable=False):
                 raise ProofError("section-mismatch", f"{sec.name} ({len(lb)} bytes at {hx(out.addr)}) differs from retail")
             compared[f"linkonce:{sec.name}"] = {"addr": hx(out.addr), "size": len(lb), "sha256": P.sha256(lb)}

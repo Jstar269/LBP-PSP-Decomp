@@ -141,6 +141,90 @@ class LinkonceData(unittest.TestCase):
         self.assertIn("'q = 0x...;'", why)
 
 
+def named_object(secs: list[tuple[str, int, int, int]], syms: list[tuple[str, int, int]]) -> bytes:
+    """A little-endian ELF32 relocatable object with the given sections (name, sh_type, size, align; contents zero)
+    and FUNC symbols (name, 1-based section number, value). Shaped like GCC 4.0 C++ output for the layout checks."""
+    shstr = b"\0"
+    name_off = []
+    for name, *_ in secs:
+        name_off.append(len(shstr))
+        shstr += name.encode() + b"\0"
+    tail = {}
+    for n in (".symtab", ".strtab", ".shstrtab"):
+        tail[n] = len(shstr)
+        shstr += n.encode() + b"\0"
+    strtab = b"\0"
+    symdata = struct.pack("<IIIBBH", 0, 0, 0, 0, 0, 0)
+    for name, shndx, value in syms:
+        symdata += struct.pack("<IIIBBH", len(strtab), value, 4, 0x12, 0, shndx)
+        strtab += name.encode() + b"\0"
+    headers, blobs, off = [(0,) * 10], [], 52
+    for (name, sh_type, size, align), no in zip(secs, name_off):
+        data = b"" if sh_type == 8 else b"\0" * size
+        headers.append((no, sh_type, 6, 0, off, size, 0, 0, align, 0))
+        blobs.append(data)
+        off += len(data)
+    for name, data, sh_type, link, info, ent in ((".symtab", symdata, 2, len(secs) + 2, 1, 16),
+                                                 (".strtab", strtab, 3, 0, 0, 0), (".shstrtab", shstr, 3, 0, 0, 0)):
+        headers.append((tail[name], sh_type, 0, 0, off, len(data), link, info, 4 if ent else 1, ent))
+        blobs.append(data)
+        off += len(data)
+    pad = -off % 4
+    ehdr = struct.pack("<16sHHIIIIIHHHHHH", b"\x7fELF\x01\x01\x01" + b"\0" * 9, 1, 8, 1, 0, 0, off + pad, 0, 52, 0, 0,
+                       40, len(headers), len(headers) - 1)
+    return ehdr + b"".join(blobs) + b"\0" * pad + b"".join(struct.pack("<10I", *h) for h in headers)
+
+
+class LinkonceText(unittest.TestCase):
+    """A GCC C++ thunk with its inline destructor in .gnu.linkonce.t.<D1>: where ld's default script lays it out."""
+    THUNK = "_ZThn12_N3ObjD1Ev"
+
+    def obj(self, *, early: bool = False, twice: bool = False) -> bytes:
+        secs = [(".text", 1, 0x14, 4), (".data", 1, 0, 1), (".bss", 8, 0, 1),
+                (".gnu.linkonce.r._ZTV3Obj", 1, 0x58, 8),            # data: not a code input
+                (".gnu.linkonce.t._ZN3MemD1Ev", 1, 0x10, 4),
+                (".gnu.linkonce.t._ZN3ObjD1Ev", 1, 0x9c, 16),        # aligned: 0x14 + 0x10 -> 0x30
+                (".gnu.linkonce.t._ZN3ObjD0Ev", 1, 0xa4, 4)]
+        if early:
+            secs.append((".text.unlikely", 1, 8, 4))
+        syms = [("_ZN3Obj2s2Ev", 1, 0), ("_ZN3MemD1Ev", 5, 0), (self.THUNK, 6, 0), ("_ZN3ObjD1Ev", 6, 12),
+                ("_ZThn12_N3ObjD0Ev", 7, 0)]
+        if twice:
+            syms.append((self.THUNK, 7, 4))
+        return named_object(secs, syms)
+
+    def test_offset_follows_file_order_and_alignment(self) -> None:
+        o = self.obj()
+        self.assertEqual(M.linkonce_text_offset(o, self.THUNK), 0x30)
+        self.assertEqual(M.linkonce_text_offset(o, "_ZN3ObjD1Ev"), 0x3c)
+        self.assertEqual(M.linkonce_text_offset(o, "_ZThn12_N3ObjD0Ev"), 0x30 + 0x9c)
+
+    def test_refusals(self) -> None:
+        o = self.obj()
+        self.assertIsNone(M.linkonce_text_offset(o, "_ZN3Obj2s2Ev"))         # in .text: the old path places it
+        self.assertIsNone(M.linkonce_text_offset(o, "_ZN3Missing"))
+        self.assertIsNone(M.linkonce_text_offset(self.obj(twice=True), self.THUNK))     # defined twice
+        self.assertIsNone(M.linkonce_text_offset(self.obj(early=True), self.THUNK))     # a layout it does not model
+
+
+class CxxVtable(unittest.TestCase):
+    def test_only_vtables_of_gcc_cxx_sources(self) -> None:
+        gcc = {"lang": "c++", "cc": "gcc404xsg-Os"}
+        self.assertTrue(M.is_cxx_vtable_section(".gnu.linkonce.r._ZTV12Obj_0886c09c", gcc))
+        self.assertTrue(M.is_cxx_vtable_section(".gnu.linkonce.r._ZTV3Obj", {"lang": "c++"}))     # primary profile
+        for name in (".gnu.linkonce.r._ZTI3Obj", ".gnu.linkonce.r._ZTS3Obj", ".gnu.linkonce.d._ZTV3Obj",
+                     ".gnu.linkonce.b._ZZ9game_heapvE4heap", ".rodata", ".gnu.linkonce.r._ZTV"):
+            self.assertFalse(M.is_cxx_vtable_section(name, gcc), name)
+        for h in ({"lang": "c99", "cc": "gcc404xs-Os"}, {"lang": "c++", "cc": "mwcc219"}, {"lang": "c++", "cc": "snc127-O2"}):
+            self.assertFalse(M.is_cxx_vtable_section(".gnu.linkonce.r._ZTV3Obj", h), h)
+
+    def test_profile_gcc404xsg_is_gcc404xs_with_assembler_g(self) -> None:
+        prof = M.gcc_profiles()
+        for o in ("O0", "O1", "O2", "O3", "Os"):
+            self.assertEqual(prof[f"gcc404xsg-{o}"]["flags"], prof[f"gcc404xs-{o}"]["flags"] + " -Wa,-g")
+            self.assertEqual(prof[f"gcc404xsg-{o}"]["driver"], prof[f"gcc404xs-{o}"]["driver"])
+
+
 class BuildKey(unittest.TestCase):
     def test_same_name_in_different_trees_gets_different_keys(self) -> None:
         # the collision: try/gen-a1/v0/FUN_x.c and try/gen-a2/v0/FUN_x.c shared build/<module>/v0__FUN_x

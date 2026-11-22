@@ -9,6 +9,10 @@ Optional keys: rodata=0xADDR (place .rodata), extra="..." (experimental extra co
 a source that needs extra flags is reported as such, never as a profile match),
 helpers=NAME@0xSTART-0xEND[,NAME@0xSTART-0xEND...] (same-file helpers at their OWN retail addresses, below).
 
+GCC C++ thunks (2026-11-21): a header symbol in a `.gnu.linkonce.t.*` section (an inline destructor's D1/D0 with the
+this-adjusting thunk before it) is linked where ld's default layout puts that section so the symbol lands at `start`;
+a C++ vtable it refers to is placed at its symbol-map address and not compared (is_cxx_vtable_section).
+
 Same-file helpers (`helpers=`). Retail compiled some functions in one translation unit with a `static` helper that sits
 at a different, non-adjacent retail address; MWCC then schedules the caller with knowledge of the helper's body, so the
 caller matches only when the helper is defined in the same source. mwccpsp emits every function in its own `.text`
@@ -93,6 +97,14 @@ GCC_PROFILE_NAMES = (frozenset(f"gcc{v}{x}-{o}" for v in ("131", "171") for o in
                      # (max-inline-insns-single=450, -auto=90: Sony's -Os does not lower them as GNU's opts.c does);
                      # PRIMARY from 2026-10-27 (docs/TOOLCHAIN.md "Inline limit and exceptions")
                      | frozenset(f"gcc404xs-{o}" for o in ("O0", "O1", "O2", "O3", "Os"))
+                     # gcc404xsg-* = gcc404xs-* + -Wa,-g: the assembler run as `gcc -g` runs it (2026-11-21, measured;
+                     # docs/TOOLCHAIN.md "Thunks and the assembler's -g"). With -g the binutils 2.14 MIPS assembler
+                     # does not fill delay slots in `.set reorder` code itself (mips_optimize 1), so a C++
+                     # this-adjusting thunk, the one piece of GCC output in reorder mode at -O1 and above, is
+                     # `addiu a0,a0,-N; j f; nop` as in all of LBP's thunks, not `j f; addiu a0,a0,-N`. Code GCC
+                     # schedules itself (`.set noreorder`) is unaffected. -Wa,-g rather than -g: GCC's own debug
+                     # sections would name the compile directory, which differs between the matcher and the promoter.
+                     | frozenset(f"gcc404xsg-{o}" for o in ("O0", "O1", "O2", "O3", "Os"))
                      # gcc404p-* / gcc404ps-* = the gcc404x-* / gcc404xs-* profiles on the PREVIOUS primary build
                      # psp-gcc-4.0.4x (before change C1 of 2026-11-09), kept so that the migration can be undone and any
                      # proof re-run under either build (docs/TOOLCHAIN.md, Findings log 2026-11-09)
@@ -183,6 +195,8 @@ def gcc_profiles() -> dict:
             for v in ("404x", "404p"):
                 _gcc_profiles[f"gcc{v}s-{o}"] = dict(_gcc_profiles[f"gcc{v}-{o}"],
                                                      flags=_gcc_profiles[f"gcc{v}-{o}"]["flags"] + inl + " -fno-exceptions")
+            _gcc_profiles[f"gcc404xsg-{o}"] = dict(_gcc_profiles[f"gcc404xs-{o}"],
+                                                   flags=_gcc_profiles[f"gcc404xs-{o}"]["flags"] + " -Wa,-g")
         assert set(_gcc_profiles) == GCC_PROFILE_NAMES
     return _gcc_profiles
 
@@ -348,6 +362,47 @@ def elf_symbols(obj: bytes):
 
 
 STT_FUNC = 2
+# GCC 4.0 C++ (no COMDAT groups) emits a function with vague linkage -- an inline or implicit destructor emitted with
+# its class's vtable -- in its own section .gnu.linkonce.t.<symbol>, preceded there by the this-adjusting thunks of its
+# vtable entries (`_ZThn<N>_...`: addiu a0,a0,-N; j body). ld's default script (psp-ld --verbose) lays out every code
+# input of the object in file order: *(.text .stub .text.* .gnu.linkonce.t.*). The same pattern as
+# tools/lbppromote.py CODE_INPUT, which checks that layout independently.
+CODE_INPUT = re.compile(r"\.text|\.stub|\.text\..+|\.gnu\.linkonce\.t\..+")
+LINKONCE_TEXT = re.compile(r"\.gnu\.linkonce\.t\..+")
+# code sections ld's default script places before the others (tools/lbppromote.py EARLY_CODE): no linkonce layout then
+EARLY_CODE = re.compile(r"\.text\.(?:unlikely|exit|startup|hot|sorted)(?:\..*)?|\.text\..*_unlikely")
+
+
+def linkonce_text_offset(obj: bytes, symbol: str) -> int | None:
+    """Offset of `symbol` from the start of the linked .text when it is defined in a `.gnu.linkonce.t.*` section of a
+    GCC object: the object's code inputs laid out in file order, each aligned to its sh_addralign (ld's default
+    script). None when the symbol is not defined once in such a section, or the object has code sections that layout
+    does not describe (EARLY_CODE). The matcher checks the linked address of the symbol afterwards (MISPLACED)."""
+    sections = elf_sections(obj)
+    if any(EARLY_CODE.fullmatch(n) for n, _s in sections):
+        return None
+    hits = [(v, sh) for n, v, sz, info, sh in elf_symbols(obj)
+            if n == symbol and 0 < sh < len(sections) and LINKONCE_TEXT.fullmatch(sections[sh][0])]
+    if len(hits) != 1:
+        return None
+    addr, where = 0, {}
+    for i, (n, s) in enumerate(sections):
+        if s[1] == 1 and CODE_INPUT.fullmatch(n):      # SHT_PROGBITS code input
+            align = max(1, s[8])
+            addr = (addr + align - 1) // align * align
+            where[i] = addr
+            addr += s[5]
+    value, sh = hits[0]
+    return where[sh] + value if sh in where else None
+
+
+def is_cxx_vtable_section(name: str, h: dict) -> bool:
+    """A C++ vtable emitted with vague linkage (.gnu.linkonce.r._ZTV<class>) by a GCC C++ source. The compared code
+    refers to it only through its address (the vptr stores of a constructor or destructor): it is placed at its
+    symbol-map address like any linkonce object, but its contents (the virtual functions' addresses and the typeinfo
+    pointer) are other functions' business and are not compared or claimed (tools/lbppromote.py does the same)."""
+    return (h.get("lang") == "c++" and h.get("cc", PRIMARY_PROFILE) in GCC_PROFILE_NAMES
+            and re.fullmatch(r"\.gnu\.linkonce\.r\._ZTV\w+", name) is not None)
 
 
 def function_sections(obj: bytes, funcs: list[tuple[str, int, int]]) -> tuple[dict[int, tuple[str, int, int]], str]:
@@ -464,7 +519,16 @@ def target_references(obj: bytes, h: dict):
         ti = names.index(".text")
         sym = next(((v, s) for n, v, s, i, sh in symbols if n == h["symbol"] and sh == ti), None)
         if sym is None:
-            return None, None
+            # a GCC function with vague linkage (and its thunks) in its own .gnu.linkonce.t section
+            hits = [(v, s, sh) for n, v, s, i, sh in symbols
+                    if n == h["symbol"] and 0 < sh < len(names) and LINKONCE_TEXT.fullmatch(names[sh])]
+            if len(hits) != 1:
+                return None, None
+            sym, ti = hits[0][:2], hits[0][2]
+            # the compared span may run past the target's section (the next one is laid out after it): every code
+            # input counts then, as for a whole-file source
+            if sym[0] + (h["end"] - h["start"]) > sections[ti][1][5]:
+                return None, None
         span_of = {ti: (sym[0], sym[0] + max(sym[1], h["end"] - h["start"]))}
     ref_names, ref_sections = set(), set()
     for n, s in sections:
@@ -782,7 +846,12 @@ def build_and_compare(args, flags: str, jobs: list) -> int:
             # placed so that the target lands at its retail address, and the rest of the object around it
             names = [n for n, _ in elf_sections(obj)]
             text_idx = names.index(".text") if ".text" in names else -1
-            text_off[p] = next((v for n, v, s, i, sh in elf_symbols(obj) if n == h["symbol"] and sh == text_idx), 0)
+            text_off[p] = next((v for n, v, s, i, sh in elf_symbols(obj) if n == h["symbol"] and sh == text_idx), None)
+            if text_off[p] is None:
+                # not in .text: a GCC .gnu.linkonce.t function (an inline destructor and its thunk), laid out after
+                # the object's other code inputs; 0 (the old default) when it is not one either
+                cc = h.get("cc", PRIMARY_PROFILE)
+                text_off[p] = (linkonce_text_offset(obj, h["symbol"]) if cc in GCC_PROFILE_NAMES else None) or 0
             placed = [f"-Ttext=0x{h['start'] - text_off[p]:08x}"]
         for sec in (".rodata", ".data", ".sdata", ".sbss", ".bss"):
             if sec in sections and sections[sec][5]:
@@ -799,6 +868,8 @@ def build_and_compare(args, flags: str, jobs: list) -> int:
         if why:
             results[p] = ("UNPLACED_SECTION", why)
             continue
+        # a C++ vtable is placed at its address but not compared (is_cxx_vtable_section)
+        lplaced = [(sec, addr, contents and not is_cxx_vtable_section(sec, h)) for sec, addr, contents in lplaced]
         if lplaced:
             # renamed first: the linker's default script would merge .gnu.linkonce.* into .bss/.data/.rodata
             index = {n: i for i, (n, _s) in enumerate(elf_sections(obj))}
