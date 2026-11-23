@@ -51,6 +51,20 @@ Statuses are hst-decomp's: `EXACT`, `MISMATCH`, `COMPILE_FAILED`, `LINK_FAILED`,
 `UNPLACED_SECTION`, `SECTION_MISMATCH`, `NO_SYMBOL`, `MISPLACED`, `EXACT_EXTRA_FLAGS`, `EXACT_FAILS_GATE`,
 `UNPLACED_FUNCTION`. Only `EXACT` counts.
 
+### Verify a pushed pull-request commit
+
+With the compilers and local game inputs configured, check out the pull-request head and run
+`python tools/lbpmatchgate.py <full-head-sha>`. The gate refuses a different HEAD or any staged,
+unstaged or untracked changes. Gitignored local configuration and campaign inputs can stay in
+place. Leave that checkout in place until the run finishes.
+
+The command prints the SHA and the path to a log in the checkout's Git metadata directory, then
+returns while the detached run continues. The log records each tool's result and ends with
+`DONE PASS <sha>` or `DONE FAIL <sha>`. A log without that final line is incomplete. Both trees
+run the full matcher. The public tree also checks the committed objdiff report. The private tree
+checks the accepted ledger and reports proof-based coverage. Keep the log private if it names
+local paths or inputs.
+
 ## Source conventions
 
 **Header (line 1)**, as hst-decomp with the tag `LBPMATCH`:
