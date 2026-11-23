@@ -21,6 +21,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbpmatch as M  # noqa: E402
 
+GCC_PATHS = {"LBP_GCC_HOME": "/fixture/gcc", "LBP_GCC4_HOME": "/fixture/gcc4"}
+
 HEADER = "/* LBPMATCH module=EBOOT.BIN start=0x08100000 end=0x08100010 symbol=FUN_08100000 lang=c99 */\nint x;\n"
 
 
@@ -79,8 +81,9 @@ class OverlappingRuns(unittest.TestCase):
             def run():
                 M.main()        # reads sys.argv once, at its start: the test sets it before starting each thread
 
-            with patch.dict(os.environ, {"LBPMATCH_BUILD_ROOT": str(build_root), "LBP_UNUSED": "1"}), \
-                 patch.object(M, "ROOT", tmp), patch.object(M, "native_dir", return_value="/fake/native"), patch.object(M, "run_wsl", side_effect=fake_run_wsl):
+            with patch.dict(os.environ, {**GCC_PATHS, "LBPMATCH_BUILD_ROOT": str(build_root)}), \
+                 patch.object(M, "_gcc_profiles", None), patch.object(M, "ROOT", tmp), \
+                 patch.object(M, "run_wsl", side_effect=fake_run_wsl):
                 saved_argv = sys.argv
                 ta, tb = threading.Thread(target=run), threading.Thread(target=run)
                 sys.argv = argv("a")
@@ -108,8 +111,9 @@ class MachineFailures(unittest.TestCase):
             tmp = Path(d)
             src = tmp / "t.c"
             src.write_text(HEADER, encoding="utf-8")
-            with patch.dict(os.environ, {"LBPMATCH_BUILD_ROOT": str(tmp / "build"), "LBP_UNUSED": "1"}), \
-                 patch.object(M, "ROOT", tmp), patch.object(M, "native_dir", return_value="/fake/native"), patch.object(M, "run_wsl", side_effect=fake_run_wsl), \
+            with patch.dict(os.environ, {**GCC_PATHS, "LBPMATCH_BUILD_ROOT": str(tmp / "build")}), \
+                 patch.object(M, "_gcc_profiles", None), patch.object(M, "ROOT", tmp), \
+                 patch.object(M, "run_wsl", side_effect=fake_run_wsl), \
                  patch.object(sys, "argv", ["lbpmatch.py", "--quiet", str(src), "--json", str(tmp / "r.json")]):
                 M.main()
             return json.loads((tmp / "r.json").read_text(encoding="utf-8"))

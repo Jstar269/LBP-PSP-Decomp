@@ -41,7 +41,6 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import lbplane as L
 import lbpmatch as M
 from lbplint import NOTE_KINDS, provenance_note
 
@@ -218,13 +217,25 @@ def seed_files(tree: Path, lanes: list[Path]) -> list[tuple[Path, str]]:
     return out
 
 
-def discover_seeds(tree: Path, lanes: list[Path], covered: set[tuple[str, int]], primary: str) -> tuple[list[dict], Counter]:
+def read_wip_seed(path: Path) -> str:
+    """Lift the first WIP match header above the body and drop repeated header lines."""
+    text = path.read_text(encoding="utf-8-sig")
+    lines = text.splitlines(keepends=True)
+    headers = [line for line in lines if line.startswith("/* LBPMATCH ")]
+    if not headers:
+        return text
+    body = "".join(line for line in lines if not line.startswith("/* LBPMATCH "))
+    return headers[0].rstrip("\n") + "\n" + body
+
+
+def discover_seeds(tree: Path, lanes: list[Path], covered: set[tuple[str, int]], primary: str, *,
+                   read_seed: Callable[[Path], str] = read_wip_seed) -> tuple[list[dict], Counter]:
     """The deduped seeds and a count of the files skipped by reason."""
     seeds: list[dict] = []
     seen: set[str] = set()
     skipped: Counter = Counter()
     for p, lane in seed_files(tree, lanes):
-        text = L.wip_text(p)
+        text = read_seed(p)
         h = header_of(text)
         if h is None:
             skipped["bad_header"] += 1
@@ -497,6 +508,12 @@ def main() -> int:
     ap.add_argument("--unlocked", action="store_true", help="also measure the unlocked GCC profiles (leads only)")
     ap.add_argument("--lane", metavar="NAME", help="write the EXACT picks as a sweep lane under ext_root")
     args = ap.parse_args()
+    try:
+        import lbplane as L
+    except ModuleNotFoundError as error:
+        if error.name != "lbplane":
+            raise
+        ap.exit(2, "lbpsweep: running a sweep requires the maintainers' lane tools\n")
     ext = L.ext_root() if L.CFG.get("ext_root") else None
     if args.lane and ext is None:
         raise SystemExit("--lane needs ext_root (lbp-config.json)")
@@ -505,7 +522,7 @@ def main() -> int:
     locked, primary, digest = lock_profiles(json.loads(MANIFEST.read_text(encoding="utf-8")))
     gcc_locked, unlocked = sweep_profiles(locked, args.unlocked)
     lanes = sorted(p for p in ext.glob("*") if (p / "LANE.json").exists()) if ext is not None and ext.exists() else []
-    seeds, skipped = discover_seeds(ROOT, lanes, L.covered(ROOT), primary)
+    seeds, skipped = discover_seeds(ROOT, lanes, L.covered(ROOT), primary, read_seed=L.wip_text)
     cache_path = SWEEP / "cache.json"
     cache = load_cache(cache_path)
     results, stats = sweep(seeds, gcc_locked, unlocked, digest, cache, args.parallel, cache_path=cache_path)
