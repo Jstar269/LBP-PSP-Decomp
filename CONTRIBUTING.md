@@ -3,9 +3,12 @@
 Contributions are welcome: matched functions, near misses with notes, compiler findings, tool fixes and documentation.
 This guide covers what you need, how a function is matched and checked, and what a pull request must contain. The
 method is hst-decomp's with the tool names changed; LBP-specific facts are in [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)
-(compiler profiles) and `data/modules.json` (modules). Contributions are licensed GPL-3.0-or-later like the project's
-own code (README, "License"). By opening a pull request you confirm that you wrote the change (or name where it came
-from) and that you may submit it under that licence.
+(compiler profiles) and `data/modules.json` (modules). Contributions are licensed CC0-1.0 (a public-domain
+dedication) like the project's own work (README, "License"), except in the paths that derive from GPL code: a change
+to a GNU libstdc++/libsupc++ reconstruction (the sources `ORIGINS.json` classes `libstdc++`) or to `toolchain/gcc4/`
+is licensed GPL-3.0-or-later. By opening a pull request you confirm that you wrote the change (or name where it came
+from) and that you may submit it under those terms. Code derived from another project keeps that project's terms and
+cannot be dedicated under CC0.
 
 Read [AGENTS.md](AGENTS.md) too: its rules (game data never enters the repository; only EXACT counts) apply to every
 change, by a person or an agent.

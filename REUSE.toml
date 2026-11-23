@@ -5,18 +5,20 @@ SPDX-PackageName = "LittleBigPlanet (PSP) matching decompilation"
 # annotations match a path, the LAST one in this file is the effective one, so the specific entries come after the
 # generic ones. `python tools/lbpreuse.py check` verifies the coverage.
 
-# The reconstructed code. The GPL grant covers only the project's own contributions: it grants no rights in the
-# original work of Sony Interactive Entertainment, Media Molecule or anyone else.
+# The reconstructed code: CC0-1.0, a public-domain dedication (owner decision 2026-11-23; GPL-3.0-or-later until
+# then, and the revisions published under it remain available under it). CC0 covers only the project's own
+# contributions: it grants no rights in the original work of Sony Interactive Entertainment, Media Molecule or
+# anyone else. The sources derived from GPL code (GNU libstdc++/libsupc++, in the generated library block below)
+# stay GPL-3.0-or-later.
 [[annotations]]
 path = ["src/**", "wip/**", "symbols/**"]
 SPDX-FileCopyrightText = "2026 Jstar269 and contributors"
-SPDX-License-Identifier = "GPL-3.0-or-later"
+SPDX-License-Identifier = "CC0-1.0"
 
-# Project-authored tools, documentation, headers, data and configuration.
+# Project-authored tools, documentation, headers, data and configuration: CC0-1.0 as well.
 [[annotations]]
 path = [
   "tools/**",
-  "toolchain/**",
   "ghidra/**",
   "data/**",
   "include/**",
@@ -36,6 +38,14 @@ path = [
   ".recomp.json",
 ]
 SPDX-FileCopyrightText = "2026 Jstar269 and contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
+# The GCC 4 build kit stays GPL-3.0-or-later: its diffs and allegrex-sched.md modify and extend GCC
+# (GPL-2.0-or-later), and its scripts and lists carry that identifier in their own SPDX lines
+# (toolchain/gcc4/README.md, "Licence").
+[[annotations]]
+path = "toolchain/**"
+SPDX-FileCopyrightText = "2026 Jstar269 and contributors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 # newlib's own licence list, byte for byte from the tarballs.
@@ -49,7 +59,7 @@ SPDX-License-Identifier = "LicenseRef-Newlib-COPYING-NEWLIB"
 path = "third_party/newlib/README.md"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Jstar269 and contributors"
-SPDX-License-Identifier = "GPL-3.0-or-later"
+SPDX-License-Identifier = "CC0-1.0"
 
 # BEGIN generated newlib annotations (tools/lbpreuse.py generate --write); do not edit by hand
 # One annotation per distinct set of notices. The files are the upstream newlib files preprocessed with

@@ -2,8 +2,10 @@
 
 This file lists the third-party code that is **in** this repository, the third-party components that are **present
 in the retail game** (and so may be reconstructed here), and the third-party tools that are **needed to build and
-verify but are not included**. The project's own code is GPL-3.0-or-later; `REUSE.toml` maps every file to its
-licence and `LICENSES/` holds the texts (`python tools/lbpreuse.py check`).
+verify but are not included**. The project's own work is CC0-1.0, a public-domain dedication (GPL-3.0-or-later until
+2026-11-23; the revisions published before then remain available under it), except where it derives from GPL code:
+the GNU libstdc++/libsupc++ reconstructions and the GCC build kit in `toolchain/gcc4/` stay GPL-3.0-or-later.
+`REUSE.toml` maps every file to its licence and `LICENSES/` holds the texts (`python tools/lbpreuse.py check`).
 
 ## In the repository
 
@@ -27,14 +29,15 @@ The game links GCC 4.0's C++ runtime library. The sources classified `libstdc++`
 functions of it (the address range with `.eh_frame` frame descriptions; `data/origin-regions.json`). Upstream:
 the `libstdc++-v3` directory of GCC 4.0 (<https://gcc.gnu.org/>), Copyright (C) 1997-2005 Free Software Foundation,
 Inc., licensed under GPL-2.0-or-later with the libstdc++ runtime exception. The reconstructions here are distributed
-under GPL-3.0-or-later, which that licence permits.
+under GPL-3.0-or-later, which that licence permits. They derive from GPL code, so they are not part of the CC0
+dedication: the project's own contribution to them stays GPL-3.0-or-later.
 
 ### Reconstructed game code
 
-Everything else in `src/` and `wip/` is the project's reconstruction of LittleBigPlanet's own code. The GPL grant
-covers only the project's contributions; it grants no rights in the original work of Sony Interactive Entertainment,
-Media Molecule or anyone else. The repository contains no game data: no executable, no decrypted module, no
-disassembly or byte dumps, no keys.
+Everything else in `src/` and `wip/` is the project's reconstruction of LittleBigPlanet's own code, under CC0-1.0.
+The dedication covers only the project's contributions; it grants no rights in the original work of Sony Interactive
+Entertainment, Media Molecule or anyone else. The repository contains no game data: no executable, no decrypted
+module, no disassembly or byte dumps, no keys.
 
 ## Third-party components present in the retail game (not in this repository)
 
@@ -47,7 +50,8 @@ functions from the user's own executable.
 
 - The game: your own copy of LittleBigPlanet (PSP, UCUS98744 v2.00) and a way to decrypt its executable locally.
 - GCC 4.0.x / 4.1.0 built for the PSP with the pspdev Allegrex patch and this project's measured changes:
-  `toolchain/gcc4/` builds them from the GNU and pspdev sources (GPL; the project's patches are in that directory).
+  `toolchain/gcc4/` builds them from the GNU and pspdev sources (GPL; the project's patches and scripts are in that
+  directory and stay GPL-3.0-or-later).
 - The decomp.me PSP compiler kits (psp-gcc 1.3.1 and 1.7.1, whose binutils 2.14 assembler the GCC 4 builds use;
   SN Systems SNC 1.2.7503 for a few objects), from the decomp community's compiler archive. They are proprietary
   Sony / SN Systems software and are never included here.

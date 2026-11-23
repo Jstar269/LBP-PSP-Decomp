@@ -33,6 +33,20 @@ class ReuseTests(unittest.TestCase):
         self.assertLess(block.index("zlib_a.c"), block.index("zlib_b.c"))
         self.assertIn('SPDX-License-Identifier = "Zlib"', block)
 
+    def test_gpl_derived_reconstructions_keep_the_gpl(self) -> None:
+        # the project's own work is CC0-1.0 (2026-11-23); what derives from GPL code is not
+        self.assertEqual(R.PROJECT_LICENCE, "CC0-1.0")
+        self.assertEqual(R.LIBRARY_CLASSES["libstdc++"][0], "GPL-3.0-or-later")
+        block = R.render_libs({"libstdc++": ["src/eboot/x.c"]})
+        self.assertIn('SPDX-License-Identifier = "GPL-3.0-or-later"', block)
+        self.assertNotIn("CC0", block)
+
+    def test_a_gpl_derived_class_without_terms_is_named(self) -> None:
+        classes = {"src/eboot/b.c": "libgcc", "src/eboot/a.c": "libgcc", "src/eboot/g.c": "game",
+                   "src/eboot/s.c": "libstdc++"}
+        self.assertEqual(R.unmapped_gpl_sources(classes), ["src/eboot/a.c", "src/eboot/b.c"])
+        self.assertEqual(R.unmapped_gpl_sources({"src/eboot/g.c": "game"}), [])
+
     def test_every_licence_named_in_the_library_classes_has_a_text(self) -> None:
         for expression, _statements in R.LIBRARY_CLASSES.values():
             for lid in R.license_ids(expression):
