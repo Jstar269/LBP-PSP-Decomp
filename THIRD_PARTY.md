@@ -30,7 +30,9 @@ functions of it (the address range with `.eh_frame` frame descriptions; `data/or
 the `libstdc++-v3` directory of GCC 4.0 (<https://gcc.gnu.org/>), Copyright (C) 1997-2005 Free Software Foundation,
 Inc., licensed under GPL-2.0-or-later with the libstdc++ runtime exception. The reconstructions here are distributed
 under GPL-3.0-or-later, which that licence permits. They derive from GPL code, so they are not part of the CC0
-dedication: the project's own contribution to them stays GPL-3.0-or-later.
+dedication: the project's own contribution to them stays GPL-3.0-or-later. The headers in `include/lbp/` that
+describe libstdc++-style layouts (the red-black tree node, the copy-on-write string) were written from the game's
+machine code and hold no libstdc++ text: they are the project's own work, under CC0-1.0 (owner decision 2026-11-23).
 
 ### Reconstructed game code
 
