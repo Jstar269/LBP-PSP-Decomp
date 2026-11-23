@@ -25,6 +25,23 @@ decomp; this file says which document to read for which task and lists the rules
 | Compiler behaviour and the compiler builds | [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md), [toolchain/gcc4/README.md](toolchain/gcc4/README.md) |
 | Licences | [THIRD_PARTY.md](THIRD_PARTY.md), `REUSE.toml` (`python tools/lbpreuse.py check`) |
 
+## Matching rules
+
+- **Skills.** Where your tool supports skills, use the lemiur matching skills (`orchestrator`, `matcher`,
+  `wall-identifier`, `helper-recovery`, `permute`, `decomp-code-rules`; source:
+  <https://github.com/lemiur/Game-Decompilation-Skill-For-Claude>). This file overrides their defaults.
+- **Typed struct members, never fixed-offset pointer casts.** Reach a field through a member of a declared struct or
+  class, never through a pointer plus a constant offset cast to another type. A function that uses such a cast is
+  not matched.
+- **Each type is declared once.** A type that several sources use lives in one header under `include/lbp/` and is
+  never copied into a source or declared again in a second header.
+- **No fakematches.** Nothing is written only to steer the compiler; the `decomp-code-rules` skill lists what is a
+  fakematch and what is a genuine idiom.
+- **Readability from the first commit.** Names, types and structure are in place when a source is first committed,
+  not left for a later clean-up.
+- **Debug symbols where they exist.** Before inventing a name or a type, check debugging.games for a build of this
+  game or a related title that has symbols.
+
 ## Integrity rules (never relaxed)
 
 - **Only EXACT counts.** A source is a match only when `python tools/lbpmatch.py <file>` reports `EXACT` for the
