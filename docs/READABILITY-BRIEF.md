@@ -33,13 +33,21 @@ matter most and have one extra rule (below).
 - **Types:** `undefined4` -> `int`/`unsigned int`/a pointer type as the code uses it; `undefined1` -> `unsigned char`
   or `char` (signedness matters: `lb` vs `lbu`); `code *` -> a function pointer type. Remove the pasted typedef block
   when nothing needs it any more.
-- **Structs:** replace `*(int *)(p + 0x14)` with a struct member. Name a field by what it holds when the code shows it
-  (`count`, `next`), otherwise by its offset (`unk_14`). Keep the layout exact (padding arrays `char pad[0x10]` where
-  needed).
-- **Shared headers:** a struct (or enum, or constant) that two or more sources of your batch use goes into a NEW
-  header `include/lbp/<topic>.h` (a short topic name: `refptr.h`, `resource.h`), included as
-  `#include "lbp/<topic>.h"`. Never edit a header that already exists under `include/lbp/` (create a new one instead);
-  a lane that edits one has the sources using it refused. Headers hold declarations only (no code).
+- **Structs:** replace `*(int *)(p + 0x14)` with a struct member. Typed structs are required for new work, and a
+  source that still uses a fixed-offset cast is not clean: it stays in the byte-match figure, is left out of the
+  clean figure, and this lane retypes it. Name a field by what it holds when the code shows it (`count`, `next`),
+  otherwise by its offset (`unk_14`). Keep the layout exact (padding arrays `char pad[0x10]` where needed).
+- **Shared headers, one home per type:** a struct (or enum, or constant) that two or more sources use is declared in
+  one header `include/lbp/<topic>.h` (a short topic name: `refptr.h`, `resource.h`), included as
+  `#include "lbp/<topic>.h"`, and nowhere else. Look first for the header that already owns the type (grep
+  `include/lbp/`). If there is one, include it, and when it needs a field or a better name, edit that header: never
+  declare the type again in a source or in a new header. Create a new header only for a type that has no home yet.
+  Headers hold declarations only (no code). An edit to an existing header affects every source that includes it, so
+  name it in `REPORT.md`; until the harvest tooling follows this rule, `lbplane.py rewrite-harvest` still refuses the
+  sources that use a header a lane edited.
+- **Merging duplicates:** the earlier rule forbade editing an existing header, so some types are declared more than
+  once. A cleanup pass merges them into the header that owns each type, starting with the red-black tree node, which
+  `rbnode.h`, `rd1c_rbtree.h`, `rd2b_rbkeymap.h`, `rd3a_uintmap.h` and `rd3c_rbtree.h` each declare.
 - **Constants:** a magic number with a clear meaning becomes an `enum` or `#define` with a name.
 - **Comments:** short why-comments where the code is not obvious (one line; no essays). Keep the second-line
   provenance note true and add to it: `; readability pass (lane <lane>, <your model>)` before its closing `*/`.
@@ -56,7 +64,8 @@ matter most and have one extra rule (below).
 - Rename an external symbol in an item that has `clones` (its clones call other addresses): rename only locals,
   parameters, types, struct fields and headers there. Its comments may name only addresses the code itself
   references (a clone's comment gets its own addresses; a sibling the code does not call cannot be mapped).
-- Touch files that are not in your batch (except new headers under `include/lbp/` and `symbols/` appends), edit
+- Touch files that are not in your batch (except headers under `include/lbp/`, by the rule above, and `symbols/`
+  appends), edit
   `tools/`, run `lbplane.py`/`lbpqueue.py`/`lbpclone.py`/`lbppromote.py`, use git, or send any of this code anywhere.
 - Invent semantics: a name is a claim about the program. When unsure, use a plain role name (`value`, `ptr`,
   `unk_14`), not a guess.

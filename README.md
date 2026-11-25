@@ -13,7 +13,7 @@
 
 [![Code matched](https://bytematch.dev/Jstar269/lbp-psp-decomp.svg?label=code%20matched&measure=matched_code_percent)](https://bytematch.dev/Jstar269/lbp-psp-decomp)
 [![Functions matched](https://bytematch.dev/Jstar269/lbp-psp-decomp.svg?label=functions&measure=matched_functions)](https://bytematch.dev/Jstar269/lbp-psp-decomp)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](#license)
+[![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue.svg)](#license)
 [![REUSE status](https://api.reuse.software/badge/github.com/Jstar269/lbp-psp-decomp)](https://api.reuse.software/info/github.com/Jstar269/lbp-psp-decomp)
 [![Platform: PSP (UCUS98744)](https://img.shields.io/badge/PSP-UCUS98744-555555.svg)](#lbp-psp-decomp)
 
@@ -136,11 +136,15 @@ appropriate.
 
 ## License
 
-Licensed by path ([REUSE](https://reuse.software/)): the project's own code (`src/`, `wip/`, `symbols/`), tools and
-documentation are **GPL-3.0-or-later** (`LICENSE`). Third-party code keeps its own terms: newlib (the notices in each
-source; `third_party/newlib/`), zlib 1.2.3 (zlib licence), GNU libstdc++/libsupc++ (GPL-2.0-or-later with the runtime
-exception, distributed here under GPL-3.0-or-later). The GPL covers only the project's own work, not the original game.
-`REUSE.toml` maps every file (`python tools/lbpreuse.py check`); [THIRD_PARTY.md](THIRD_PARTY.md) has the details.
+Licensed by path ([REUSE](https://reuse.software/)): the project's own work (`src/`, `wip/`, `symbols/`, the tools
+and the documentation) is **CC0-1.0**, a public-domain dedication (`LICENSE`). Two parts derive from GPL code and stay
+**GPL-3.0-or-later** (`LICENSES/GPL-3.0-or-later.txt`): the reconstructions of GNU libstdc++/libsupc++ (upstream
+GPL-2.0-or-later with the runtime exception; the sources `ORIGINS.json` classes `libstdc++`) and the GCC build kit in
+`toolchain/gcc4/` (patches to GCC and the scripts around them). Other third-party code keeps its own terms: newlib
+(the notices in each source; `third_party/newlib/`) and zlib 1.2.3 (zlib licence). CC0 covers only the project's own
+work, not the original game. Until 2026-11-23 the project's own work was offered under GPL-3.0-or-later; the
+revisions published before that date remain available under that licence. `REUSE.toml` maps every file
+(`python tools/lbpreuse.py check`); [THIRD_PARTY.md](THIRD_PARTY.md) has the details.
 
 ## Learn more
 
