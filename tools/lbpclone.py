@@ -34,6 +34,11 @@ NOTE = re.compile(r"^/\*\s*(Mechanical translation|Clone of).*?\*/\n", re.M)
 MAX_DATA_SHIFT = 0x10000
 # I-type opcodes that write rt: ALU immediates and integer loads (lui is handled separately)
 GPR_WRITE_RT = set(range(0x08, 0x0F)) | set(range(0x20, 0x27))
+# I-type opcodes whose rs is a GPR operand and whose immediate completes it (a lui's low half): ALU immediates, integer
+# and FPU loads/stores, cache, ll/sc and the VFPU loads/stores (lv.s lvl/lvr.q lv.q sv.s svl/svr.q sv.q). In the other
+# opcodes from 8 up the rs field is no base register (COP1/COP2/VFPU sub-ops and formats, SPECIAL2/SPECIAL3) or the
+# immediate is no low half (branch-likely offsets).
+LO_HALF_OPS = set(range(0x08, 0x0F)) | set(range(0x20, 0x30)) | {0x30, 0x31, 0x32, 0x35, 0x36, 0x38, 0x39, 0x3A, 0x3D, 0x3E}
 
 
 def words(data: bytes) -> list[int]:
@@ -54,7 +59,7 @@ def analyse(ws: list[int]) -> tuple[tuple[int, ...], list[tuple[str, int, int]]]
             hi[rt] = (w & 0xFFFF) << 16
             refs.append(("hi", i, (w & 0xFFFF) << 16))
             continue
-        elif op >= 8 and rs in hi:
+        elif op in LO_HALF_OPS and rs in hi:
             sig.append(w & 0xFFFF0000)
             imm = w & 0xFFFF
             if op not in (0x0C, 0x0D, 0x0E) and imm & 0x8000:  # andi/ori/xori zero-extend
@@ -63,10 +68,12 @@ def analyse(ws: list[int]) -> tuple[tuple[int, ...], list[tuple[str, int, int]]]
         else:
             sig.append(w)
         # a register written here no longer holds a lui high half
-        if op in (0x00, 0x1C, 0x1F):
+        if op in (0x00, 0x1C) or (op == 0x1F and (w & 0x3F) == 0x20):  # seb/seh/wsbh/bitrev write rd
             hi.pop((w >> 11) & 31, None)
-        elif op in GPR_WRITE_RT or (op == 0x11 and rs == 0):
+        elif op in GPR_WRITE_RT or op in (0x1F, 0x30, 0x38) or (op == 0x11 and rs in (0, 2)):  # ext/ins, ll/sc, mfc1/cfc1
             hi.pop(rt, None)
+        elif op == 3:                                   # jal links into ra
+            hi.pop(31, None)
     return tuple(sig), refs
 
 

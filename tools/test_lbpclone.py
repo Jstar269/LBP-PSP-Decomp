@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Game-free tests for the clone retargeting of tools/lbpclone.py (ported from hst-decomp's test_hstclone.py where the
-behaviour is the same)."""
+"""Game-free tests for tools/lbpclone.py: clone retargeting (ported from hst-decomp's test_hstclone.py where
+the behaviour is the same) and the masked signature and references of analyse (synthetic code only)."""
 from __future__ import annotations
 
 import sys
 import unittest
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbpclone as C  # noqa: E402
 
@@ -79,6 +80,61 @@ class HelperRangeTests(unittest.TestCase):
     def test_unmapped_helper_refuses_the_clone(self) -> None:
         text = self.HEAD + "void FUN_00001000(void) {}\n"
         self.assertIsNone(C.retarget(text, 0x1000, 0x2000, 0x2020, {}, {}))
+
+
+class OperandDecodingTests(unittest.TestCase):
+    """Only instructions whose rs is a GPR operand complete a lui; every GPR write ends the lui's value."""
+    LUI_S0 = (0x0F << 26) | (16 << 16) | 0x0809          # lui s0, 0x0809
+    LUI_T0 = (0x0F << 26) | (8 << 16) | 0x0809           # lui t0, 0x0809
+    LW_A0_4_T0 = (0x23 << 26) | (8 << 21) | (4 << 16) | 4  # lw a0, 4(t0)
+
+    @staticmethod
+    def fpu(funct: int) -> int:                         # <op>.s $f0, $f0, $f12: rs field = fmt S = 16 (s0's number)
+        return (0x11 << 26) | (16 << 21) | (12 << 16) | funct
+
+    @staticmethod
+    def ext(rt: int, rs: int, pos: int, size: int) -> int:
+        return (0x1F << 26) | (rs << 21) | (rt << 16) | ((size - 1) << 11) | (pos << 6)
+
+    def test_fpu_arithmetic_is_not_a_low_half(self) -> None:
+        add_sig, add_refs = C.analyse([self.LUI_S0, self.fpu(0x00), 0x03E00008, 0])   # add.s
+        mul_sig, _ = C.analyse([self.LUI_S0, self.fpu(0x02), 0x03E00008, 0])          # mul.s
+        self.assertNotEqual(add_sig, mul_sig)
+        self.assertEqual(add_refs, [("hi", 0, 0x08090000)])
+
+    def test_ext_field_is_not_a_low_half(self) -> None:
+        sig0, refs = C.analyse([self.LUI_T0, self.ext(9, 8, 0, 8)])
+        sig8, _ = C.analyse([self.LUI_T0, self.ext(9, 8, 8, 8)])
+        self.assertNotEqual(sig0, sig8)
+        self.assertEqual(refs, [("hi", 0, 0x08090000)])
+
+    def test_branch_likely_offset_is_not_a_low_half(self) -> None:
+        beql = lambda off: (0x14 << 26) | (8 << 21) | off  # noqa: E731  beql t0, zero, off
+        self.assertNotEqual(C.analyse([self.LUI_T0, beql(2)])[0], C.analyse([self.LUI_T0, beql(3)])[0])
+
+    def test_fpu_load_is_still_a_low_half(self) -> None:
+        lwc1 = (0x31 << 26) | (16 << 21) | 0x10           # lwc1 $f0, 0x10(s0)
+        self.assertEqual(C.analyse([self.LUI_S0, lwc1])[1], [("hi", 0, 0x08090000), ("data", 1, 0x08090010)])
+
+    def test_writes_through_ext_ll_sc_and_cfc1_end_the_high_half(self) -> None:
+        writers = {"ext": self.ext(8, 9, 0, 8), "ll": (0x30 << 26) | (9 << 21) | (8 << 16),
+                   "sc": (0x38 << 26) | (9 << 21) | (8 << 16), "cfc1": (0x11 << 26) | (2 << 21) | (8 << 16) | (31 << 11)}
+        for name, w in writers.items():
+            with self.subTest(name):
+                sig, refs = C.analyse([self.LUI_T0, w, self.LW_A0_4_T0])
+                self.assertEqual(refs, [("hi", 0, 0x08090000)])
+                self.assertEqual(sig[2], self.LW_A0_4_T0)
+
+    def test_seb_writes_rd_and_keeps_the_source(self) -> None:
+        seb_t0_t1 = (0x1F << 26) | (9 << 16) | (8 << 11) | (0x10 << 6) | 0x20   # seb t0, t1
+        _sig, refs = C.analyse([self.LUI_T0, seb_t0_t1, self.LW_A0_4_T0])
+        self.assertEqual(refs, [("hi", 0, 0x08090000)])
+
+    def test_jal_ends_a_high_half_in_ra(self) -> None:
+        lui_ra = (0x0F << 26) | (31 << 16) | 0x0809
+        lw_ra = (0x23 << 26) | (31 << 21) | (4 << 16) | 4
+        _sig, refs = C.analyse([lui_ra, (3 << 26) | 0x100000, 0, lw_ra])
+        self.assertEqual([r for r in refs if r[0] == "data"], [])
 
 
 if __name__ == "__main__":
