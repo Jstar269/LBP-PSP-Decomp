@@ -7,7 +7,8 @@ Each imported function is an 8-byte stub in .sceStub.text (stub table entry i of
 a source calls it by its system-library name. Names come from Nakagawa Recomp's NID corpus (`tools/nid_corpus.json`,
 read-only): entries of the derivable classes carry no stored NID, it is sha1(name)[0:4] read little-endian; the other
 classes store their NID. Unknown NIDs keep an address name. `--append` appends the new lines to symbols/<module>.txt
-(append-only; names already present are skipped).
+(append-only; names already present are skipped, and a function imported through two stub entries is named at
+its first stub only, since a name binds one address).
 """
 from __future__ import annotations
 
@@ -52,7 +53,8 @@ def main() -> int:
     elf = MI.Elf(data)
     mi = MI.module_info(elf)
     existing = M.load_symbols(args.module)
-    lines, known, unknown = [], 0, 0
+    lines, known, unknown, twice = [], 0, 0, 0
+    named: dict[str, int] = {}
     for row in MI.imports(elf, mi, True):
         base = int(row["stub_table"], 16)
         for i, nid in enumerate(row.get("nids", [])):
@@ -64,8 +66,14 @@ def main() -> int:
             known += 1
             if name in existing:
                 continue
+            if named.setdefault(name, addr) != addr:
+                # the same function imported through a second stub entry: one name can be bound to one address
+                # only (load_symbols refuses a second binding), so the later stub keeps its address name
+                twice += 1
+                continue
             lines.append(f"{name} = 0x{addr:08x};   # import {row['library']} NID {nid} (lbpnids)")
-    print(f"{args.module}: {known} imports named, {unknown} NIDs unknown to the corpus, {len(lines)} new symbol lines")
+    print(f"{args.module}: {known} imports named, {unknown} NIDs unknown to the corpus, {len(lines)} new symbol lines"
+          + (f", {twice} stubs of an already named import left unnamed" if twice else ""))
     if args.append and lines:
         with (M.ROOT / "symbols" / f"{args.module}.txt").open("a", encoding="utf-8", newline="\n") as stream:
             stream.write("".join(line + "\n" for line in lines))
