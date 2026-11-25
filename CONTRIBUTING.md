@@ -20,7 +20,8 @@ change, by a person or an agent.
   code. `tools/lbpbootstrap.py` checks the decrypted file against the SHA-256 in `data/modules.json`.
 - **Windows with WSL** (Ubuntu 24.04, with `libc6-i386`) and **Python 3.12 or newer** with no third-party packages.
 - **The compilers, which you build or install yourself** (none is in this repository):
-  - the open-source GCC 4.x PSP compilers (`psp-gcc-4.0.4x`, the primary, and `4.0.2x`, `4.0.2h`, `4.1.0s`), built
+  - the open-source GCC 4.x PSP compilers (`psp-gcc-4.0.4c` for the default `gcc404xs-Os` profile, plus
+    `4.0.2x`, `4.0.2h` and `4.1.0s` for other profiles), built
     from the GNU and pspdev sources by [`toolchain/gcc4/`](toolchain/gcc4/README.md), which says exactly what to
     install, downloads and verifies the sources, and checks the result against the recorded builds;
   - the decomp.me `psp-gcc-1.3.1` kit (its Sony binutils 2.14 assembler is what the GCC 4 builds assemble with) and
@@ -83,8 +84,7 @@ These hold for every file, commit, pull request, issue and comment, here and any
 
 1. **Pick a function.** `python tools/lbpfamilies.py` ranks unmatched clone families (code identical apart from
    addresses): one match unlocks the whole family, because `lbpclone.py` propagates it. For single functions,
-   `python tools/lbpqueue.py` builds batches, listing the Ghidra pseudocode path and, if one exists, the best
-   mechanically generated candidate (`best_generated.source`), which is a good starting point. New here? Take a
+   the near misses in `wip/` are good leads. The campaign runner uses `lbpqueue.py` to prepare batches. New here? Take a
    function from an open [good first issue](https://github.com/Jstar269/lbp-psp-decomp/labels/good%20first%20issue)
    instead: those are held for new contributors (`data/starter-issues.json`), so the maintainer's tools and agents
    leave them alone while you work. Say in the issue which one you are taking.
@@ -147,8 +147,9 @@ grep -l "start=0x<addr>" src/*/* wip/*
 
 `module`, `start`, `end` and `symbol` are required (`symbol` must be the name your source defines for the function).
 `lang` is `c99` or `c++`. Optional: `cc=<profile>`, the section placement keys above, and the experimental `extra=`.
-Without `cc=` a source uses the primary profile `gcc404xs-Os` (GCC 4.0.4 with the pspdev Allegrex patch and this
-project's measured changes). The other profiles are `gcc404xs-O0`...`-O3`, the other GCC 4.x builds of `toolchain/gcc4/` (`gcc410-*`, `gcc402x-*`, `gcc402t-*`, `gcc402h-*`, `gcc404x-*`, `gcc404xi-Os`, and the unpatched `gcc402-*`, `gcc432-*`), the decomp.me psp-gcc kits (`gcc131-*`, `gcc171-*`, with `x` after the version for Allegrex `ext`/`ins`), SN Systems SNC (`snc127-O0`...`-O3`) and Metrowerks `mwcc219` (`tools/lbpmatch.py` has the list;
+Without `cc=` a source uses the default profile `gcc404xs-Os`. It uses the `psp-gcc-4.0.4c` build with `-Os`,
+`-fno-exceptions` and the GCC default inline limits (`max-inline-insns-single=450` and `max-inline-insns-auto=90`).
+The previous `psp-gcc-4.0.4x` build is available through `gcc404p-*` and `gcc404ps-*`. The other profiles are `gcc404xs-O0`...`-O3`, the other GCC 4.x builds of `toolchain/gcc4/` (`gcc410-*`, `gcc402x-*`, `gcc402t-*`, `gcc402h-*`, `gcc404x-*`, `gcc404xi-Os`, and the unpatched `gcc402-*`, `gcc432-*`), the decomp.me psp-gcc kits (`gcc131-*`, `gcc171-*`, with `x` after the version for Allegrex `ext`/`ins`), SN Systems SNC (`snc127-O0`...`-O3`) and Metrowerks `mwcc219` (`tools/lbpmatch.py` has the list;
 [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) says which functions need which).
 
 **Line 2: the note.** Exactly one provenance note, and it must be true. "Hand-written" means a person wrote it; a
@@ -229,6 +230,14 @@ files, `python tools/lbpreuse.py check` confirms that every tracked file is cove
 new library sources need `python tools/lbpreuse.py generate --write` first. `ORIGINS.json` is a snapshot made by
 `python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
 
+CI also runs these game-free checks. Run them before you push.
+
+```sh
+python tools/lbpgate.py --all --wip
+python tools/lbpreuse.py check
+python -m unittest discover -s tools -p "test_*.py"
+```
+
 For a change that touches many sources, `python tools/lbpmatch.py --all` is the full regression (it shares `build/`
 with any concurrent run, so run one at a time).
 
@@ -243,7 +252,10 @@ A pull request contains:
   name the generator tag when you started from a generated candidate), and any appended `symbols/` lines;
 - in the description: the `python tools/lbpmatch.py <files>` output showing `EXACT` for each source, what you
   changed from any starting candidate, and, if you used an AI tool, which one;
-- for a near miss in `wip/`: the differing words and what you ruled out, as trailing `//` comments.
+- for a near miss in `wip/`: the differing words and what you ruled out, as trailing `//` comments;
+- for a completed good first issue function, remove that function’s entry from `data/starter-issues.json` and its
+  obsolete `wip/` files in the same pull request. Keep the entries for functions still open in the issue. CI
+  checks that the list no longer includes completed matches.
 
 What happens next: CI runs the checks above on the pull request (a first-time contributor's run waits for the
 maintainer's approval). The maintainer reviews the change and **re-verifies every source with the maintainers' tools
