@@ -206,6 +206,24 @@ class PrCheckTests(unittest.TestCase):
         self.commit("drop")
         self.assertEqual(self.refusals(), [])
 
+    def test_appended_symbol_lines_must_keep_the_map_loadable(self) -> None:
+        # lbpmatch.load_symbols refuses the whole map over one malformed line or a name bound twice, so such an
+        # appended line breaks every match of the module; an address name (FUN_/DAT_...) bound elsewhere silently
+        # sends its calls to another address
+        for line in ("b = 0x0001001;;\n", "b 0x00010010\n", "a = 0x00010004;   # a second address\n",
+                     "FUN_00010010 = 0x00010020;\n"):
+            with self.subTest(line=line):
+                self.git("checkout", "-q", "-B", "topic", "base")
+                self.write("symbols/EBOOT.BIN.txt", "a = 0x00010000;\n" + line)
+                self.commit("append")
+                self.assertEqual([r.split()[0] for r in self.refusals()], ["symbols"])
+        self.git("checkout", "-q", "-B", "topic", "base")
+        self.write("symbols/EBOOT.BIN.txt", "a = 0x00010000;\na = 0x00010000;   # repeated, same address\n"
+                                            "DAT_00010020 = 0x00010020;\n# a comment\n\n")
+        self.write("symbols/NEW.PRX.txt", "c = 0x0;\n")
+        self.commit("append")
+        self.assertEqual(self.refusals(), [])
+
     def test_header_note_and_gate(self) -> None:
         self.write("src/eboot/no_header.c", "int f(void) { return 0; }\n")
         self.write("src/eboot/no_note.c", HEADER + "/* written somehow */\nint FUN_00010000(void) { return 0; }\n")

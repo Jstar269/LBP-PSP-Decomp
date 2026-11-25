@@ -22,7 +22,9 @@ adds or changes:
                   /mnt/c/Users/...), a private key block, a GitHub, OpenAI or AWS token
   dump            an added file with more than 16 lines that look like a disassembly listing (an address, an
                   instruction word, a mnemonic): disassembly of the game is never published
-  symbols         a deleted or changed line in symbols/ (the symbol maps are append-only)
+  symbols         a deleted or changed line in symbols/ (the symbol maps are append-only), or a map that no longer
+                  loads: a line that is not `NAME = 0xADDRESS;` or a name bound to two addresses (tools/lbpmatch.py
+                  load_symbols), or an address name (FUN_/DAT_/LAB_/PTR_/jtbl_xxxxxxxx) bound to another address
   header          a source in src/ or wip/ whose first line is not an LBPMATCH header with module, start, end and
                   symbol, or that repeats the header further down; a source in src/ without one of the provenance
                   notes CONTRIBUTING.md lists right after the header (tools/lbplint.py provenance_note: one-line
@@ -67,6 +69,32 @@ DUMP_LINE = re.compile(r"^\W*(0x)?[0-9a-fA-F]{6,8}:?\s+(0x)?[0-9a-fA-F]{8}\s+[a-
 DUMP_LIMIT = 16
 HEADER = re.compile(rf"^/\* {MATCH} (?=.*\bmodule=\S)(?=.*\bstart=0x[0-9a-fA-F]+)(?=.*\bend=0x[0-9a-fA-F]+)"
                     r"(?=.*\bsymbol=\S).*\*/\s*$")
+
+
+SYMBOL_LINE = re.compile(r"(\S+)\s*=\s*(0x[0-9A-Fa-f]+)\s*;?")
+ADDRESS_NAME = re.compile(r"(?:FUN|DAT|LAB|PTR|jtbl)_([0-9a-fA-F]{8})")
+
+
+def symbol_problems(text: str) -> list[str]:
+    """Why a symbol map would not load in tools/lbpmatch.py load_symbols, or binds an address name to an address other
+    than its own ([] when neither)."""
+    seen: dict[str, int] = {}
+    out = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        m = SYMBOL_LINE.fullmatch(line)
+        if not m:
+            out.append(f"line {n} is not `NAME = 0xADDRESS;`: {line[:60]}")
+            continue
+        name, value = m.group(1), int(m.group(2), 16)
+        named = ADDRESS_NAME.fullmatch(name)
+        if named and int(named.group(1), 16) != value:
+            out.append(f"line {n}: {name} = 0x{value:08x} contradicts the address its name carries")
+        if seen.setdefault(name, value) != value:
+            out.append(f"line {n}: {name} is already bound to 0x{seen[name]:08x}")
+    return out
 
 
 def git(repo: Path, *args: str) -> str:
@@ -243,6 +271,10 @@ def check(repo: Path, base: str) -> list[str]:
             refusals.append(f"symbols  {path}: no longer a regular file (append only)")
         elif path.startswith("symbols/") and status == "M" and removed_lines(repo, base, path):
             refusals.append(f"symbols  {path}: existing lines changed or deleted (append only)")
+        elif path.startswith("symbols/") and path.endswith(".txt"):
+            problems = symbol_problems(data.decode("utf-8", "replace"))
+            if problems:
+                refusals.append(f"symbols  {path}: the map no longer loads: {problems[0]}")
         if re.match(r"(?s)^(src|wip)/.*\.(c|cpp)$", path):
             text = data.decode("utf-8", "replace")
             lines = text.split("\n")
