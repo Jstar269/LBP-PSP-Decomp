@@ -147,6 +147,16 @@ class StarterTests(unittest.TestCase):
                     {"module": "EBOOT.BIN", "start": "0x08840f44", "issue": 2}])
         self.assertEqual(Q.cmd_starters(self.root), 1)
 
+    def test_the_check_flags_a_starter_that_a_source_places_as_a_helper(self) -> None:
+        (self.root / "src" / "eboot").mkdir(parents=True)
+        (self.root / "src" / "eboot" / "a_08840f44.c").write_text(
+            "/* LBPMATCH module=EBOOT.BIN start=0x08840f44 end=0x08840f64 symbol=FUN_08840f44 lang=c99 "
+            "helpers=FUN_0880b604@0x0880b604-0x0880b634 */\nint x;\n", encoding="utf-8")
+        self.write([{"module": "EBOOT.BIN", "start": "0x08875f1c", "issue": 2}])
+        self.assertEqual(Q.cmd_starters(self.root), 0)
+        self.write([{"module": "EBOOT.BIN", "start": "0x0880b604", "issue": 2}])
+        self.assertEqual(Q.cmd_starters(self.root), 1)
+
     def test_the_committed_list_is_well_formed_and_names_only_open_functions(self) -> None:
         starters = Q.load_starters()
         self.assertEqual(Q.cmd_starters(), 0, "a starter function is matched: remove its entry and update the issue")

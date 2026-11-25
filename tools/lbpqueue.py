@@ -225,7 +225,8 @@ def cmd_starters(root: Path = M.ROOT) -> int:
                 h = M.parse_header(p)
             except ValueError:
                 continue
-            src[(h["module"], h["start"])] = p.relative_to(root).as_posix()
+            for _name, start, _end in M.placed_functions(h):  # the target and every helper the source places
+                src.setdefault((h["module"], start), p.relative_to(root).as_posix())
     wip = wip_leads(root)
     done = 0
     for (module, start), ent in sorted(starters.items(), key=lambda kv: (kv[1]["issue"], kv[0])):
