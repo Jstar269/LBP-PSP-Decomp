@@ -1,7 +1,7 @@
 {
   "_about": "Copy this file to lbp-config.json (gitignored) and replace every placeholder with a path on your machine. Any key can instead be set with the environment variable LBP_<KEY> (upper case, e.g. LBP_CAMPAIGN_ROOT), which overrides the file. Keys starting with an underscore are comments. 'host' paths are paths on the machine that runs the tools (JSON needs backslashes doubled); 'wsl' paths are as seen from inside WSL and are pasted into sh command lines, so $HOME is allowed. Check the result with: python tools/lbpconfig.py check",
   "_campaign_root": "host. Campaign directory with ledger/campaign.json (the function list and load segments of each module) and inputs/revision-selection.json (where your own decrypted retail modules live). The exact-match tools read retail bytes through it. Used by lbpmatch, lbpdiff, lbpdis, lbpcov, lbpclone, lbpfamilies, lbpgen, lbpqueue, lbplib, lbpsample.",
-  "campaign_root": "C:\\hst\\campaign-build",
+  "campaign_root": "C:\\lbp\\campaign",
   "_pspdev_bin": "wsl. Directory inside WSL with the PSPDEV binutils psp-ld, psp-objcopy and psp-objdump. lbpmatch links and extracts with them; lbpdiff disassembles with them.",
   "pspdev_bin": "/mnt/c/hst/toolchain/pspdev/bin",
   "_mwcc_native": "wsl. Directory inside WSL, on the native Linux filesystem (not /mnt/c), holding the wibo binary and builds/<build>/mwccpsp.exe (mwccpsp 3.0.1 build 219 is builds/219/mwccpsp.exe).",
@@ -30,7 +30,7 @@
   "hst_campaign_root": "C:\\hst\\campaign-build",
   "_snc_home": "host. Directory of the SN Systems SNC kit for PSP (decomp.me pspsnc_1.2.7503.0); sources with cc=snc127-* compile with its pspsnc.exe natively.",
   "snc_home": "C:\\lbp\\compilers\\pspsnc_1.2.7503.0",
-  "_gcc4_home": "wsl. Directory with the open-source GCC 4.x PSP cross compilers built by build_gcc4_psp.sh (psp-gcc-4.1.0s/, psp-gcc-4.3.2/); profiles gcc410-*, gcc432-*.",
+  "_gcc4_home": "wsl. Directory with the open-source GCC 4.x PSP cross compilers that toolchain/gcc4/build.sh builds (LBP_GCC4_ROOT there): psp-gcc-4.0.4c/ for the primary profile gcc404xs-* (and every gcc404x*), psp-gcc-4.0.2x/, psp-gcc-4.0.2h/ and psp-gcc-4.1.0s/ for the gcc402x-*, gcc402t-* and gcc410-* sources. Needed for matching.",
   "gcc4_home": "$HOME/lbp-gcc4",
   "_decryptor": "host. The PSP game decryptor script tools/lbpintake.py runs on your own disc image (read-only; it writes the decrypted modules under the gitignored inputs/). Only lbpintake.py needs it.",
   "decryptor": "C:\\lbp\\tools\\psp_game_decryptor.py"
