@@ -27,6 +27,11 @@ decomp; this file says which document to read for which task and lists the rules
 
 ## Matching rules
 
+- **Starter functions are for new contributors.** `data/starter-issues.json` lists the functions that an open
+  `good first issue` offers; `tools/lbpqueue.py` reserves them, so lane batches never include them, and
+  `tools/lbpnearperm.py` never permutes them. Agents never match, permute or install one, not even as a helper; the
+  issue's contributor does. To open a starter issue, add its functions to the file in the same change; when the issue
+  closes, remove them. `python tools/lbpqueue.py starters` lists the entries that a source now covers.
 - **Skills.** Where your tool supports skills, use the lemiur matching skills (`orchestrator`, `matcher`,
   `wall-identifier`, `helper-recovery`, `permute`, `decomp-code-rules`; source:
   <https://github.com/lemiur/Game-Decompilation-Skill-For-Claude>). This file overrides their defaults.

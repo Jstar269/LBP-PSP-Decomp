@@ -84,7 +84,10 @@ These hold for every file, commit, pull request, issue and comment, here and any
 1. **Pick a function.** `python tools/lbpfamilies.py` ranks unmatched clone families (code identical apart from
    addresses): one match unlocks the whole family, because `lbpclone.py` propagates it. For single functions,
    `python tools/lbpqueue.py` builds batches, listing the Ghidra pseudocode path and, if one exists, the best
-   mechanically generated candidate (`best_generated.source`), which is a good starting point.
+   mechanically generated candidate (`best_generated.source`), which is a good starting point. New here? Take a
+   function from an open [good first issue](https://github.com/Jstar269/lbp-psp-decomp/labels/good%20first%20issue)
+   instead: those are held for new contributors (`data/starter-issues.json`), so the maintainer's tools and agents
+   leave them alone while you work. Say in the issue which one you are taking.
 2. **Read the code.** `python tools/lbpdis.py 0xADDR` prints the retail disassembly of any reviewed function, so look at
    the callees and callers too: they tell you types, argument counts and what a call returns. The Ghidra pseudocode
    is advisory and often wrong in detail (see the compiler notes below).
