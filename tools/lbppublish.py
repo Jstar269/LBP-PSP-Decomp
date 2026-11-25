@@ -17,7 +17,9 @@ Copies every file git tracks (`git ls-files`) into --out, byte for byte, except 
     FUN_<address>; owner decision 2026-11-01, reversing the 2026-10-28 rule that kept it private);
   * PRIVATE_PATHS: maintainer-only files (state and hand-over notes with machine paths, the external-lane tooling
     and its notes, files that state this tree's private rules);
-  * files git tracks although .gitignore ignores them (added by force).
+  * files git tracks although .gitignore ignores them (added by force);
+  * symbolic links: a copy would publish the bytes of the link's target (a PRIVATE_PATHS or DISC_DERIVED file, or
+    anything outside the tree) under the link's public name.
 
 Written in addition: ORIGINS.json (the classes of the copied sources only), the public versions of README.md and
 AGENTS.md (PUBLIC_FILES, from docs/public/), data/public-figures.json (below) and docs/objdiff-report.json, which is
@@ -38,7 +40,8 @@ the code bytes of the public scope that published sources produce in that identi
 counts); the data bytes they produce and their share of the whole image are given beside it. T3 is not measured. The same scope and ledger rules give the function counts: public_scope_functions = the functions
 of the public scope, public_t1_functions = those of them with an accepted proof of a published source (counts only).
 
---audit scans a built tree for: machine or private paths and user names; key-like material; source files whose
+--audit scans a built tree for: machine or private paths and user names, and any user's home directory; key-like
+material and GitHub, OpenAI and AWS tokens; source files whose
 class is not publishable or that ORIGINS.json does not list; files the policy excludes. It also counts, without
 refusing, decompiler-style text (Ghidra typedefs in mechanical translations), disassembly-like lines in docs, and the
 cross-project clones of hst-decomp sources it publishes (by class).
@@ -98,6 +101,17 @@ PRIVATE_TEXT = re.compile(r"(?i)[a-z]:[\\/]+(?:nk\b|users[\\/]+jstar|psvitabacku
                           r"(?<!github\.com/)(?<!bytematch\.dev/)(?<!\x22name\x22: \x22)\bjstar(?:269)?\b(?! and contributors)|"
                           r"psp-content-universal|nakagawa-recomp-history-private|"
                           r"\bprivate[\\/]+(?:hst-|lbp-|compilers|campaign-builds|regression|worktrees)")
+# Any user's home directory and bare tokens, as hst-decomp's publish scan refuses them (tools/hstpublish.py PRIVATE_PATH
+# and PRIVATE_TOKEN): a contributor's or a second machine's path is as private as the maintainers' own. Windows profiles
+# in any letter case (and /mnt/<drive>/Users, the macOS /Users and Git for Windows' /<drive>/Users at the start of an
+# absolute path), /home/<name>; GitHub, OpenAI and AWS tokens. Placeholders (`<you>`, /home/user) and the non-personal
+# Windows profiles stay allowed.
+_NOT_PERSONAL = r"(?!<|(?:default|public|all users|shared|test|user|you)\b)"
+PERSONAL_TEXT = re.compile(r"(?i:[a-z]:[\\/]+users[\\/]+" + _NOT_PERSONAL + r"\w|/mnt/[a-z]/users/" + _NOT_PERSONAL
+                           + r"\w|(?<![\w.~:-])/(?:[a-z]/)?users/" + _NOT_PERSONAL + r"\w|/home/(?!<|user\b)\w)|"
+                           r"\bgh[pousr]_[A-Za-z0-9]{20}|\bgithub_pat_\w{20}|"
+                           r"\bsk-(?:[A-Za-z0-9]{20}|(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20})|"
+                           r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")
 AUDIT_SELF = ("tools/lbppublish.py", "tools/test_lbppublish.py")   # they hold the patterns and fixtures themselves
 KEY_TEXT = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY|(?i:\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*\S{8,})|"
                       r"\b[0-9a-fA-F]{32}\b(?![0-9a-fA-F])")
@@ -126,6 +140,8 @@ def plan(tracked: list[str], ignored: set[str], classes: dict[str, str], with_sy
     for path in tracked:
         if path in ignored:
             excluded["gitignored (tracked by force)"].append(path)
+        elif (root / path).is_symlink():
+            excluded["symbolic link (its target is never copied)"].append(path)
         elif matches(path, PRIVATE_PATHS):
             excluded["maintainer-only path (PRIVATE_PATHS)"].append(path)
         elif matches(path, DISC_DERIVED):
@@ -426,7 +442,7 @@ def audit(tree: Path) -> int:
             refusals.append(f"{rel}: excluded by the policy")
         text = p.read_text(encoding="utf-8", errors="replace")
         for n, line in enumerate(text.splitlines() if rel not in AUDIT_SELF else [], 1):
-            if PRIVATE_TEXT.search(line):
+            if PRIVATE_TEXT.search(line) or PERSONAL_TEXT.search(line):
                 refusals.append(f"{rel}:{n}: private path or user name: {line.strip()[:120]}")
             m = KEY_TEXT.search(line)
             if m and not DIGEST_CONTEXT.search(line):
