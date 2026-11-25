@@ -133,6 +133,22 @@ def families(text: str) -> dict[str, set[str]]:
     return found
 
 
+# Notices of other projects' code that families() does not map to a newlib licence; a source carrying one (or a newlib
+# notice) outside the classes with their own terms is not the project's own work, so CC0-1.0 must not cover it.
+OTHER_NOTICES = {"Free Software Foundation": "GNU/FSF", "GNU General Public License": "GNU GPL",
+                 "Jean-loup Gailly": "zlib"}
+
+
+def third_party_notices(text: str) -> list[str]:
+    """The third-party notices found in the comments of a source: newlib licence ids and OTHER_NOTICES names."""
+    try:
+        found = sorted(families(text))
+    except SystemExit as e:   # a University of California notice families() cannot place is still a notice
+        found = [str(e)[:60]]
+    comments = " ".join(re.sub(r"\s+", " ", c) for c in COMMENT.findall(text))
+    return found + [name for marker, name in OTHER_NOTICES.items() if marker in comments]
+
+
 class Entry:
     def __init__(self, path: Path):
         self.rel = lbporigin.rel(path)
@@ -311,11 +327,18 @@ def check_command() -> int:
     annotations = config.get("annotations", [])
     compiled = []
     for n, a in enumerate(annotations):
-        paths = [a["path"]] if isinstance(a["path"], str) else a["path"]
+        paths = a.get("path", [])
+        paths = [paths] if isinstance(paths, str) else paths
+        if not paths:
+            problems.append(f"annotation #{n + 1} lacks path")
         for key in ("SPDX-License-Identifier", "SPDX-FileCopyrightText"):
             if not a.get(key):
-                problems.append(f"annotation #{n + 1} ({paths[0]}...) lacks {key}")
+                problems.append(f"annotation #{n + 1} ({(paths or ['?'])[0]}...) lacks {key}")
         compiled.append([glob_regex(p) for p in paths])
+
+    def expression(n: int) -> str:
+        value = annotations[n].get("SPDX-License-Identifier", "")
+        return value if isinstance(value, str) else " AND ".join(value)
     files = tracked_files()
     effective: dict[str, int] = {}
     uncovered, skipped = [], 0
@@ -332,7 +355,7 @@ def check_command() -> int:
         problems.append(f"{len(uncovered)} tracked files are not covered by any annotation (first: {uncovered[0]})")
     used = set()
     for n in set(effective.values()):
-        used |= license_ids(annotations[n]["SPDX-License-Identifier"])
+        used |= license_ids(expression(n))
     for lid in sorted(used):
         if not (LICENSES / f"{lid}.txt").is_file():
             problems.append(f"licence {lid} is used but LICENSES/{lid}.txt is missing")
@@ -346,7 +369,7 @@ def check_command() -> int:
         problems.append("the generated library block of REUSE.toml is stale (run: lbpreuse.py generate --write)")
     for cls, paths in libs.items():
         for path in paths:
-            if path in effective and annotations[effective[path]]["SPDX-License-Identifier"] != LIBRARY_CLASSES[cls][0]:
+            if path in effective and expression(effective[path]) != LIBRARY_CLASSES[cls][0]:
                 problems.append(f"{path} is {cls} but its effective annotation is not {LIBRARY_CLASSES[cls][0]}")
     for path in unmapped_gpl_sources(tracked_classes()):
         problems.append(f"{path} is GPL-derived (a class of UNMAPPED_GPL_CLASSES) but LIBRARY_CLASSES gives it no "
@@ -360,17 +383,31 @@ def check_command() -> int:
     if BEGIN_MD not in readme_text or splice(readme_text, BEGIN_MD, END_MD,
                                              BEGIN_MD + "\n\n" + render_table(entries) + "\n" + END_MD) != readme_text:
         problems.append("the source table of third_party/newlib/README.md is stale (run: lbpreuse.py generate --write)")
-    newlib_expected = {e.rel for e in entries}
+    newlib_expected = {e.rel: e.expression for e in entries}
     for path, n in effective.items():
-        if "LicenseRef-Newlib" in annotations[n]["SPDX-License-Identifier"].replace("LicenseRef-Newlib-COPYING-NEWLIB", ""):
+        if "LicenseRef-Newlib" in expression(n).replace("LicenseRef-Newlib-COPYING-NEWLIB", ""):
             if path not in newlib_expected:
                 problems.append(f"{path} carries a newlib licence but lbporigin does not classify it newlib")
-    for path in sorted(newlib_expected):
-        if path not in effective or "LicenseRef-Newlib" not in annotations[effective[path]]["SPDX-License-Identifier"]:
+    for path, want in sorted(newlib_expected.items()):
+        # the generated annotation must be the effective one: a later annotation must not replace its licence
+        got = expression(effective[path]) if path in effective else ""
+        if "LicenseRef-Newlib" not in got:
             problems.append(f"{path} is newlib-derived but its effective annotation has no newlib licence")
+        elif got != want:
+            problems.append(f"{path} is newlib-derived: its effective annotation is {got!r}, not the generated {want!r}")
+    # a source that carries another project's notice is not the project's own work: it must not fall under CC0-1.0
+    own_terms = set(newlib_expected) | {p for paths in libs.values() for p in paths}
+    for path, n in sorted(effective.items()):
+        if (path in own_terms or path.split("/", 1)[0] not in ("src", "wip", "include")
+                or not path.endswith((".c", ".cpp", ".h"))):
+            continue
+        notices = third_party_notices((ROOT / path).read_text(encoding="utf-8", errors="replace"))
+        if notices:
+            problems.append(f"{path} carries a third-party notice ({', '.join(notices)}) but lbporigin gives it no "
+                            f"library class, so REUSE.toml gives it {expression(n)}")
     by_expr: dict[str, int] = defaultdict(int)
     for n in effective.values():
-        by_expr[annotations[n]["SPDX-License-Identifier"]] += 1
+        by_expr[expression(n)] += 1
     print(f"tracked files: {len(files)}; covered: {len(effective)}; skipped as REUSE does (licence files): {skipped}")
     for expr, count in sorted(by_expr.items(), key=lambda kv: -kv[1])[:12]:
         print(f"  {count:5d}  {expr}")
