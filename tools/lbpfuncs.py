@@ -89,17 +89,21 @@ def data_code_pointers(elf: MI.Elf, ranges) -> dict[int, int]:
             r_off, r_info = struct.unpack_from("<II", elf.data, s["offset"] + 8 * k)
             if r_info & 0xFF != R_MIPS_32:
                 continue
+            value_base = 0
             if s["type"] == MI.SHT_PRXREL:
-                ofs_base = (r_info >> 8) & 0xFF
-                if ofs_base >= len(phdrs):
+                # bits 8-15: the segment the site lies in; bits 16-23: the segment the word is relative to (the
+                # loader adds that segment's base to the word, so it holds target - that segment's address)
+                ofs_base, addr_base = (r_info >> 8) & 0xFF, (r_info >> 16) & 0xFF
+                if ofs_base >= len(phdrs) or addr_base >= len(phdrs):
                     continue
                 addr = phdrs[ofs_base]["vaddr"] + r_off
+                value_base = phdrs[addr_base]["vaddr"]
             else:
                 addr = r_off
             o = elf.v2o(addr)
             if o is None or any(lo <= addr < hi for lo, hi, _n in ranges):
                 continue
-            v = MI.u32(elf.data, o)
+            v = (MI.u32(elf.data, o) + value_base) & 0xFFFFFFFF
             if any(lo <= v < hi for lo, hi, _n in ranges):
                 out[addr] = v
     if not any(s["type"] in (9, MI.SHT_PRXREL) for s in elf.sections):
@@ -211,7 +215,9 @@ def find_starts(elf: MI.Elf) -> tuple[list[int], dict]:
     mi = MI.module_info(elf)
     if mi:
         for row in MI.exports(elf, mi, True):
-            for t in row.get("targets", []):
+            # the entry table holds the functions' addresses first, then the exported variables' (module_info and
+            # the like): only the former are functions
+            for t in row.get("targets", [])[:row["functions"]]:
                 add(int(t, 16), "export")
     for pc, w in words.items():
         if w >> 26 == 3:

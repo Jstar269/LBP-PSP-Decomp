@@ -9,7 +9,8 @@ Inputs:
   --ghidra  optional: a CSV with a hexadecimal start address in the first column and, if present, the end (exclusive)
             or size in a column named `end`/`size` (Ghidra's ExportFunctionsCSV.java, or any export in that form).
 
-Every start inside an executable section (section headers; the executable load segment when there are none) becomes
+Every start inside an executable section (section headers; when there are none, the executable load segment up to
+the module's read-only tables, the import stubs counted as `.sceStub.text`: segment_code_ranges) becomes
 a function that runs to the next start or the end of its section. Trailing alignment padding (zero words that are not
 the delay slot of a final jump or branch) is cut off, so `end` is the end of the function's own code: the padding is
 inter-function fill the linker inserts, accounted for by the whole-module build (docs/PLAN.md), not by a source.
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import struct
 import sys
 import tomllib
 from pathlib import Path
@@ -49,8 +51,64 @@ def exec_ranges(elf: MI.Elf) -> list[tuple[int, int, str]]:
     out = [(s["addr"], s["addr"] + s["size"], s["name"]) for s in elf.sections
            if s["flags"] & 4 and s["size"] and s["type"] != 8]
     if not out:
-        out = [(p["vaddr"], p["vaddr"] + p["filesz"], "segment") for p in elf.load() if p["flags"] & 1]
+        out = segment_code_ranges(elf)
     return sorted(out)
+
+
+def _module_tables(elf: MI.Elf) -> tuple[list[tuple[int, int]], list[int]]:
+    """([lo, hi) of each import stub table], [address of each table the module info leads to]) of a module: the
+    stub tables are code (8 bytes per imported function); the module info itself, the export and import tables and
+    the NID, entry and library-name tables they point at are read-only data."""
+    mi = MI.module_info(elf)
+    if not mi:
+        return [], []
+    data_at = [mi["ent_top"], mi["stub_top"]]
+    seg = next((p for p in elf.load() if p["offset"] <= mi["file_offset"] < p["offset"] + p["filesz"]), None)
+    if seg is not None:
+        data_at.append(seg["vaddr"] + mi["file_offset"] - seg["offset"])
+    stubs = []
+    walks = ((mi["stub_top"], mi["stub_end"], "<IHHBBHII", 5), (mi["ent_top"], mi["ent_end"], "<IHHBBHI", 4))
+    for top, end, fmt, default in walks:
+        a = top
+        while a < end:
+            o = elf.v2o(a)
+            if o is None or o + struct.calcsize(fmt) > len(elf.data):
+                break
+            row = struct.unpack_from(fmt, elf.data, o)
+            name_p, fcount, table_p = row[0], row[5], row[6]
+            data_at += [x for x in (name_p, table_p) if x]
+            if fmt == "<IHHBBHII" and fcount:
+                stubs.append((row[7], row[7] + 8 * fcount))
+            a += 4 * (row[3] or default)
+    return stubs, data_at
+
+
+def segment_code_ranges(elf: MI.Elf) -> list[tuple[int, int, str]]:
+    """The code of a module without section headers (a PRX often has none): each executable load segment up to the
+    read-only tables that follow the code in a PSP module (the module info, the export and import tables and what
+    they point at), with the import stubs as `.sceStub.text`. The segment's file size is not the end of the code:
+    those tables share the executable segment with it."""
+    stubs, data_at = _module_tables(elf)
+    out = []
+    for p in elf.load():
+        if not p["flags"] & 1:
+            continue
+        lo, hi = p["vaddr"], p["vaddr"] + p["filesz"]
+        mine = sorted((a, b) for a, b in stubs if lo <= a < b <= hi)
+        end = min((a for a in data_at if lo < a < hi), default=hi)
+        end = max([end] + [b for _a, b in mine])
+        pos = lo
+        for a, b in mine:
+            if a < pos:
+                a = pos
+            if pos < a:
+                out.append((pos, a, "segment"))
+            if a < b:
+                out.append((a, b, ".sceStub.text"))
+            pos = max(pos, b)
+        if pos < end:
+            out.append((pos, end, "segment"))
+    return out
 
 
 def trim_padding(elf: MI.Elf, start: int, end: int) -> int:
