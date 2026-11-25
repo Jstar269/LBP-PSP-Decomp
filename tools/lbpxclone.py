@@ -14,7 +14,9 @@ of the LBP module with the same signature and a consistent address mapping gets 
 try/xclone-<tag>/, with the header's module, start and end retargeted and the HST symbol-map entries the mapping
 reveals passed to lbpmatch.py as --symbols-extra. Only candidates lbpmatch.py reports EXACT are installed in
 src/<module dir>/, with the note `Clone of hst-decomp src/... (lbpxclone.py tag X)`, and the symbol entries they
-linked against are appended to symbols/<module>.txt.
+linked against are appended to symbols/<module>.txt. A function a source in src/ already places (its target or a
+`helpers=` entry, checked again before installing) or a starter function an open good first issue holds
+(data/starter-issues.json) is never a clone target.
 
 --cc filters exemplars by compiler profile prefix (`gcc` = the Sony psp-gcc kits, `mwcc` = mwccpsp).
 """
@@ -33,6 +35,7 @@ import lbpclone as C  # noqa: E402
 import lbpconfig as CFG  # noqa: E402
 import lbpmatch as M  # noqa: E402
 import lbpproject as P  # noqa: E402
+import lbpqueue as Q  # noqa: E402
 
 HST_HEADER = re.compile(r"/\*\s*HSTMATCH\s+(.*?)\*/", re.S)
 NOTE = re.compile(r"^/\*.*?\*/\n", re.S)
@@ -78,6 +81,17 @@ def load_hst_symbols(hst_root: Path, module: str) -> dict[str, int]:
     return out
 
 
+def covered_starts(module: str) -> set[int]:
+    """Starts of the module's functions that a source in src/ places: each header's target and its helpers."""
+    out: set[int] = set()
+    for q in (M.ROOT / "src").rglob("*"):
+        if q.suffix in (".c", ".cpp"):
+            h = M.parse_header(q)
+            if h["module"] == module:
+                out.update(start for _name, start, _end in M.placed_functions(h))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tag", required=True)
@@ -95,11 +109,11 @@ def main() -> int:
 
     ledger = json.loads((M.CAMPAIGN / "ledger" / "campaign.json").read_text(encoding="utf-8-sig"))
     targets = C.load_functions(ledger, args.module)
-    covered = {M.parse_header(q)["start"] for q in (M.ROOT / "src").rglob("*")
-               if q.suffix in (".c", ".cpp") and M.parse_header(q)["module"] == args.module}
+    covered = covered_starts(args.module)
+    held = Q.starter_starts(args.module, M.ROOT)   # an open good first issue holds these for new contributors
     by_sig = defaultdict(list)
     for start, (end, (sig, refs)) in targets.items():
-        if start not in covered:
+        if start not in covered and start not in held:
             by_sig[sig].append(start)
 
     modules = hst_modules(hst_campaign)
@@ -170,7 +184,10 @@ def main() -> int:
     dest_dir.mkdir(parents=True, exist_ok=True)
     accepted, accepted_bytes = 0, 0
     committed: dict[str, int] = {}
+    covered = covered_starts(args.module)   # again: a source may have been added during the match run
     for t_start, rows in sorted(candidates.items()):
+        if t_start in covered:
+            continue
         for exemplar, cand in rows:
             if status.get(str(cand.resolve())) != "EXACT":
                 continue
