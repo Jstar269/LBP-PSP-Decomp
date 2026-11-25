@@ -46,8 +46,48 @@ ASM_TOKEN = re.compile(r"(?<![\w$])(?:__asm__|__asm|_asm|asm)(?![\w$])")
 DIRECTIVE = re.compile(r"(?<![\w\])>])\.(?:word|byte|half|hword|short|long|quad|dword|incbin|ascii|asciiz|string|space|skip|fill|zero|"
                        r"float|double|octa|int|2byte|4byte|8byte)\b(?!\s*=)", re.I)
 PRAGMA = re.compile(r"^[ \t]*#[ \t]*pragma[ \t]+([A-Za-z_][\w]*)(.*)$", re.M)
-INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+[<"]([^>"]+)[>"]', re.M)
-TEXT_SECTION = re.compile(r"""(?:section\s*\(\s*["']\.text|__declspec\s*\(\s*section\s*["']\.text|#\s*pragma\s+(?:section|segment)\b[^\n]*\.text)""")
+# every directive that reads a file (the forms tools/hstproof.py include_closure resolves): #include, #include_next,
+# #import, with the `%:` digraph or the `??=` trigraph for `#`; a computed include (`#include NAME`) names no file
+INCLUDE = re.compile(r'^[ \t]*(?:#|%:|\?\?=)[ \t]*(?:include_next|include|import)\b[ \t]*(.*)$', re.M)
+INCLUDE_NAME = re.compile(r'"([^"\n]+)"|<([^>\n]+)>')
+TEXT_SECTION = re.compile(r"""(?:section(?:__)?\s*\(\s*["']\s*\.text|__declspec\s*\(\s*section\s*["']\s*\.text|"""
+                          r"""(?:#|%:)\s*pragma\s+\w*(?:section|segment)\w*\b[^\n]*\.text|"""
+                          r"""_Pragma\s*\(\s*"[^"\n]*(?:section|segment)[^\n]*\.text)""")
+# a section attribute (`section` or `__section__`) inside __attribute__((...)): its name must be one string literal,
+# or the gate cannot tell that it is not .text (a macro, a macro parameter, or "." "text")
+ATTRIBUTE = re.compile(r"(?<![\w$])(?:__attribute__|__attribute)\s*\(\s*\(")
+SECTION_ATTR = re.compile(r"(?<![\w$])(?:__section__|section)\s*\(")
+SECTION_NAME = re.compile(r'\s*"([^"\\\n]*)"\s*\)')
+
+
+def section_name_findings(code: str, lines: list[str]) -> list[Finding]:
+    """text-section for a section attribute whose name is not one plain string literal."""
+    out: list[Finding] = []
+    for a in ATTRIBUTE.finditer(code):
+        depth, j = 0, code.find("(", a.start())
+        start = j
+        while j < len(code):
+            ch = code[j]
+            if ch == '"':
+                k = j + 1
+                while k < len(code) and code[k] not in '"\n':
+                    k += 2 if code[k] == BACKSLASH else 1
+                j = k
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        body = code[start:j + 1]
+        for s in SECTION_ATTR.finditer(body):
+            if not SECTION_NAME.match(body, s.end()):
+                ln = _line_of(code, start + s.start())
+                out.append(Finding("text-section", REFUSE, ln, lines[ln - 1]))
+    return out
+
+
 HEADER_EXT = {".h", ".hpp", ".hh", ".hxx", ""}
 # compiler controls this project's sources use (pragmas that change how code is generated, not what is emitted)
 KNOWN_PRAGMAS = {"opt_strength_reduction", "opt_unroll_loops", "opt_common_subs", "opt_common", "opt_loop_invariants",
@@ -98,6 +138,71 @@ def strip_comments(text: str) -> str:
     return "".join(out)
 
 
+def splice_lines(text: str) -> str:
+    """Translation phase 2, as every C compiler does it before it reads a token: each backslash-newline removed, so
+    `as\\<newline>m` is the keyword `asm` and `#pra\\<newline>gma` a #pragma. The removed newlines are put back after
+    the logical line, so a finding keeps the line number of the line the logical line starts on and every line
+    after it keeps its own."""
+    if "\\\n" not in text:
+        return text
+    out: list[str] = []
+    buf: list[str] = []
+    for line in text.split("\n"):
+        if line.endswith("\\"):
+            buf.append(line[:-1])
+            continue
+        out.append("".join(buf) + line)
+        out.extend([""] * len(buf))
+        buf = []
+    if buf:                     # the text ends in a backslash: no newline follows the last one
+        out.append("".join(buf))
+        out.extend([""] * (len(buf) - 1))
+    return "\n".join(out)
+
+
+# a backslash, then spaces or tabs, then a newline: GCC splices it (with a warning), other compilers may not, so the
+# gate cannot know which tokens or comments the compiler reads there
+LOOSE_SPLICE = re.compile(r"\\[ \t]+$", re.M)
+
+
+# `##` pastes tokens into an identifier after the gate has read the text: `CAT(as, m)("...")` is an asm statement
+# that holds no `asm` token. A paste is refused when its two sides could spell one of these keywords.
+ASM_KEYWORDS = ("__asm__", "__asm", "_asm", "asm")
+DEFINE = re.compile(r"^[ \t]*(?:#|%:|\?\?=)[ \t]*define[ \t]+[A-Za-z_$][\w$]*(?:\(([^)]*)\))?(.*)$", re.M)
+PASTE = re.compile(r"##|%:%:")
+
+
+def _asm_part(token: str) -> bool:
+    return any(token in k for k in ASM_KEYWORDS)
+
+
+def paste_findings(code: str, lines: list[str]) -> list[Finding]:
+    """asm-paste for a `##` in a #define whose operands could join into `asm`, `_asm`, `__asm` or `__asm__`: a
+    macro parameter (or __VA_ARGS__) can be anything; a literal side counts only if it is part of such a keyword."""
+    out: list[Finding] = []
+    for d in DEFINE.finditer(code):
+        params = {p.strip() for p in (d.group(1) or "").split(",") if p.strip()}
+        if "..." in params:
+            params.add("__VA_ARGS__")
+        body = re.sub(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'', '""', d.group(2))
+        for p in PASTE.finditer(body):
+            left = re.search(r"([\w$]+)\s*$", body[:p.start()])
+            right = re.match(r"\s*([\w$]+)", body[p.end():])
+            sides = [s.group(1) if s else None for s in (left, right)]
+            free = [s is None or s in params for s in sides]
+            if all(free):
+                risky = True
+            elif not any(free):
+                risky = _asm_part(sides[0] + sides[1])
+            else:
+                risky = _asm_part(sides[1] if free[0] else sides[0])
+            if risky:
+                ln = _line_of(code, d.start())
+                out.append(Finding("asm-paste", REFUSE, ln, lines[ln - 1]))
+                break
+    return out
+
+
 def _line_of(text: str, pos: int) -> int:
     return text.count("\n", 0, pos) + 1
 
@@ -129,6 +234,8 @@ def asm_template(code: str, pos: int) -> str | None:
         ch = code[j]
         if ch == "(":
             depth += 1
+            if depth > 1:
+                return None     # a parenthesised or macro-built template
         elif ch == ")":
             depth -= 1
             if depth == 0:
@@ -146,13 +253,58 @@ def asm_template(code: str, pos: int) -> str | None:
                     k += 1
             out.append("\n")
             j = k
+        elif not ch.isspace():
+            return None         # a macro or anything else but string literals in the template: unreadable
         j += 1
     return "".join(out)
 
 
+C_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "v": "\v", "f": "\f", "a": "\a", "b": "\b", "e": "\x1b",
+             BACKSLASH: BACKSLASH, '"': '"', "'": "'", "?": "?"}
+
+
+def decode_template(template: str) -> str | None:
+    """An asm template as the compiler hands it to the assembler: every C escape decoded, octal (`\\012`) and hex
+    (`\\x0a`) included, and a backslash-newline removed; tabs become spaces. None when the decoded text holds
+    anything but printable ASCII, spaces, tabs and newlines, or a backslash: an escape the assembler could read as
+    a line or statement separator (`\\012`, `\\073`), a macro argument or a second instruction."""
+    out: list[str] = []
+    i, n = 0, len(template)
+    while i < n:
+        c = template[i]
+        if c != BACKSLASH or i + 1 >= n:
+            out.append(c)
+            i += 1
+            continue
+        d = template[i + 1]
+        if d in "01234567":
+            m = re.match(r"[0-7]{1,3}", template[i + 1:])
+            out.append(chr(int(m.group(0), 8) & 0xFF))
+            i += 1 + len(m.group(0))
+        elif d == "x":
+            m = re.match(r"[0-9A-Fa-f]+", template[i + 2:])
+            if not m:
+                return None
+            out.append(chr(int(m.group(0), 16) & 0xFF))
+            i += 2 + len(m.group(0))
+        elif d == "\n":
+            i += 2              # a line splice inside the literal
+        elif d in C_ESCAPES:
+            out.append(C_ESCAPES[d])
+            i += 2
+        else:
+            return None
+    text = "".join(out)
+    if BACKSLASH in text or any(not (ch in "\n\t" or " " <= ch <= "~") for ch in text):
+        return None
+    return text.replace("\t", " ")
+
+
 def vfpu_only(template: str) -> bool:
     """True when every instruction of an asm template is a VFPU instruction (labels and empty parts ignored)."""
-    text = template.replace(BACKSLASH + "n", "\n").replace(BACKSLASH + "t", " ")
+    text = decode_template(template)
+    if text is None:
+        return False
     seen = False
     for part in re.split(r"[\n;]", text):
         part = part.strip()
@@ -171,24 +323,31 @@ EMPTY_ASM = re.compile(r"""(?:__asm__|__asm|asm)\s*(?:__volatile__|volatile)?\s*
 def check_text(text: str, header: dict | None = None, tree: str = "src") -> list[Finding]:
     """Findings for one source. `header` is the parsed LBPMATCH header (for extra=); `tree` is "src" for a source that
     is installed (an `extra=` key is refused there) or anything else (wip, a lane's scratch file)."""
-    code = strip_comments(text)
+    code = strip_comments(splice_lines(text))
     findings: list[Finding] = []
     lines = text.split("\n")
+    code_lines = code.split("\n")
     for m in ASM_TOKEN.finditer(code):
         stmt = _statement_around(code, m.start())
         ln = _line_of(code, m.start())
         shown = lines[ln - 1] if ln - 1 < len(lines) else m.group(0)
-        if shown.lstrip().startswith("#"):
-            continue            # a #pragma asm line is reported once, as pragma-code
+        if PRAGMA.match(code_lines[ln - 1]):     # the logical line (a #pragma split by a line splice too)
+            continue            # a #pragma asm line is reported once, as pragma-code (an asm in a #define is not)
         if REGISTER_BINDING.match(stmt):
             findings.append(Finding("register-asm-binding", IDIOM, ln, shown))
-        elif EMPTY_ASM.search(code[m.start():m.start() + 200]):
+        elif EMPTY_ASM.match(code, m.start()):     # this statement's own template, not a later barrier
             findings.append(Finding("empty-asm-barrier", IDIOM, ln, shown))
         elif (header is not None and header.get("asm") == "vfpu" and VFPU_REASON.search(text)
               and (tpl := asm_template(code, m.start())) is not None and vfpu_only(tpl)):
             findings.append(Finding("vfpu-inline-asm", IDIOM, ln, shown))
         else:
             findings.append(Finding("asm-emit", REFUSE, ln, shown))
+    for m in LOOSE_SPLICE.finditer(text):
+        ln = _line_of(text, m.start())
+        findings.append(Finding("loose-line-splice", REFUSE, ln, lines[ln - 1]))
+
+
+    findings += paste_findings(code, lines)
     for m in DIRECTIVE.finditer(code):
         ln = _line_of(code, m.start())
         findings.append(Finding("data-directive", REFUSE, ln, lines[ln - 1]))
@@ -202,9 +361,11 @@ def check_text(text: str, header: dict | None = None, tree: str = "src") -> list
     for m in TEXT_SECTION.finditer(code):
         ln = _line_of(code, m.start())
         findings.append(Finding("text-section", REFUSE, ln, lines[ln - 1]))
+    shown_at = {f.line for f in findings if f.kind == "text-section"}
+    findings += [f for f in section_name_findings(code, lines) if f.line not in shown_at]
     for m in INCLUDE.finditer(code):
-        suffix = Path(m.group(1)).suffix.lower()
-        if suffix not in HEADER_EXT:
+        name = INCLUDE_NAME.match(m.group(1).strip())
+        if not name or Path(name.group(1) or name.group(2)).suffix.lower() not in HEADER_EXT:
             ln = _line_of(code, m.start())
             findings.append(Finding("binary-include", REFUSE, ln, lines[ln - 1]))
     if tree == "src" and header is not None and "extra" in header:
@@ -220,13 +381,48 @@ def tree_of(path: Path, root: Path = ROOT) -> str:
     return rel.parts[0] if rel.parts else "other"
 
 
+def included_findings(path: Path, root: Path = ROOT, seen: set | None = None,
+                      dirs: tuple[Path, ...] = ()) -> list[Finding]:
+    """The refusals inside the repository files `path` includes, transitively: the compiler reads a header as part of
+    the source, so an asm statement or a .text section in it is one in the source. `"x"` resolves in the including
+    file's directory, the source's directory, then include/ (MWCIncludes); `<x>` in include/; a file outside the
+    repository (a compiler header) is not read. Each refusal is reported on the line of the source's #include."""
+    seen = set() if seen is None else seen
+    dirs = dirs or (path.parent,)
+    text = path.read_text(encoding="utf-8", errors="replace")
+    code, lines = strip_comments(splice_lines(text)), text.split("\n")
+    out: list[Finding] = []
+    for m in INCLUDE.finditer(code):
+        nm = INCLUDE_NAME.match(m.group(1).strip())
+        if not nm:
+            continue
+        name = nm.group(1) or nm.group(2)
+        options = ([path.parent / name, *(d / name for d in dirs)] if nm.group(1) else []) + [root / "include" / name]
+        hit = next((c.resolve() for c in options if c.is_file()), None)
+        if hit is None or hit in seen or not hit.is_relative_to(root.resolve()):
+            continue
+        seen.add(hit)
+        inner = refusals(_check_header(hit.read_text(encoding="utf-8", errors="replace"), root))
+        inner += included_findings(hit, root, seen, dirs)
+        ln = _line_of(code, m.start())
+        rel = hit.relative_to(root.resolve()).as_posix()
+        out += [Finding(f.kind, REFUSE, ln, f"{rel}:{f.line}: {f.text.strip()}") for f in inner]
+    return out
+
+
 def check_file(path: Path, root: Path = ROOT) -> list[Finding]:
     text = path.read_text(encoding="utf-8", errors="replace")
     header = None
     m = re.search(r"/\*\s*LBPMATCH\s+(.*?)\*/", text[:2000], re.S)
     if m:
         header = {k: v.strip('"') for k, v in re.findall(r'(\w+)=("[^"]*"|\S+)', m.group(1))}
-    return check_text(text, header, tree_of(path, root))
+    found = check_text(text, header, tree_of(path, root)) + included_findings(path, root)
+    return sorted(found, key=lambda f: (f.line, f.kind))
+
+
+def _check_header(text: str, root: Path) -> list[Finding]:
+    """A header: no LBPMATCH header, so no VFPU allowance and no extra= key."""
+    return check_text(text, None, "include")
 
 
 def refusals(findings: list[Finding]) -> list[Finding]:
