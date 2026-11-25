@@ -220,11 +220,12 @@ python tools/lbpprcheck.py --base origin/main                  # what CI checks 
 ```
 
 `lbpprcheck.py` needs no game or compiler: it refuses binary files, game data, never-versioned paths (`build/`,
-`try/`, `inputs/`, `campaign/`, `lbp-config.json`), personal paths and tokens, disassembly-like listings, changed lines
-in `symbols/`, sources without a valid header or note, and anything the fake-match gate refuses. When a change adds
-files, `python tools/lbpreuse.py check` confirms that every tracked file is covered by the licence map (`REUSE.toml`);
-new library sources need `python tools/lbpreuse.py generate --write` first. `ORIGINS.json` is a snapshot made by
-`python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
+`try/`, `inputs/`, `campaign/`, `lbp-config.json`, SDK fingerprint catalogues), personal paths and tokens,
+disassembly-like listings, changed lines in `symbols/`, sources without a valid header or note, and anything the
+fake-match gate refuses. When a change adds files, `python tools/lbpreuse.py check` confirms that every tracked file
+is covered by the licence map (`REUSE.toml`); new library sources need `python tools/lbpreuse.py generate --write`
+first. `ORIGINS.json` is a snapshot made by `python tools/lbporigin.py`; refresh it before a release (`lbppublish.py`
+classifies afresh).
 
 For a change that touches many sources, `python tools/lbpmatch.py --all` is the full regression (it shares `build/`
 with any concurrent run, so run one at a time).

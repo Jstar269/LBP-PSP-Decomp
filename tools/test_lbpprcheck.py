@@ -66,6 +66,16 @@ class PrCheckTests(unittest.TestCase):
         kinds = sorted(r.split()[0] for r in self.refusals())
         self.assertEqual(kinds, ["binary", "binary", "place", "place", "place", "place", "place"])
 
+    def test_fingerprint_catalogues_are_never_versioned(self) -> None:
+        catalogue = '{"format": "psp-decomp.sdk-fingerprints.v1", "masking": "clone-analyse.v1", "entries": []}\n'
+        self.write("data/sdk-fingerprints-lbp-psp-decomp.json", catalogue)
+        self.write("docs/renamed.json", catalogue)
+        self.write("docs/proposals.JSON", catalogue.replace("v1", "v1.proposals"))
+        self.write("docs/format.md", "The catalogue starts with " + catalogue)
+        self.commit("catalogue")
+        kinds = sorted(r.split()[0] for r in self.refusals())
+        self.assertEqual(kinds, ["catalogue", "catalogue", "place"])
+
     def test_private_paths_secrets_and_dumps(self) -> None:
         self.write("docs/a.md", "see C:" + "\\Users\\someone\\game\n")   # split: this file is checked too
         self.write("docs/b.md", "token ghp_" + "a" * 30 + "\n")

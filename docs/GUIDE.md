@@ -96,6 +96,7 @@ New here:
 | `lbpbounds.py` | Agreement of boundary lists from other tools (Nakagawa `analyze.py` TOML, a Ghidra CSV). |
 | `lbptoolchain.py` | Compiler fingerprints per module or address range (move/li encodings, branch-likely rate, prologue order, movz/movn). |
 | `lbpxclone.py` | Cross-project clones: hst-decomp exact sources reused for byte-identical (up to addresses) LBP functions, verified by `lbpmatch.py`. |
+| `lbpfingerprint.py` | Cross-title SDK fingerprints: `export` writes a catalogue of the accepted matches' masked fingerprints (outside the tree), `lookup CATALOGUE...` proposes clones in this title from another PSP decomp's catalogue, such as hst-decomp's, without that project's tree or game. Proposals only; see [SDK fingerprint catalogue](#sdk-fingerprint-catalogue). |
 | `lbppublish.py` | The would-be public tree (`--out`): tracked files minus Sony SDK / startup / unattributed sources (`lbporigin.py` classes from `data/origin-regions.json` and notes), disc-derived tables, the symbol map and maintainer files; `--audit` checks a tree (including that its objdiff report agrees with its figures); writes `data/public-figures.json` (bytes and function counts), `data/public-functions.txt` (the public scope's functions behind them) and, from those, `docs/objdiff-report.json`. Never touches a remote. |
 | `lbpreport.py` | The objdiff progress report for bytematch.dev and recomp.fyi: `build_report` (used by `lbppublish.py`), and `--tree <public tree> [--check]` to write or compare a tree's report. One unit per recovered translation unit (`EBOOT.BIN/tu-<index>@<first address>`, from `data/translation-units.json`), then one per published source outside them and one `EBOOT.BIN/not-yet-recovered/FUN_<address>` per remaining function of the public scope: names, addresses, sizes and source paths the tree already publishes, never game bytes. |
 | `lbpqueue.py` | Batches for matching agents (`try/agent-queue/<name>-NN.json`): `--kind families` (one representative per unmatched clone family), `near` (lbpgen candidates within 35% of the words, wip leads), `singles`, `library`; flags `ins_zero_low`/`vfpu`; skips what earlier batches and lanes reserved or attempted. |
@@ -106,6 +107,56 @@ New here:
 | `lbppromote.py` | The promotion gate (hst-decomp's `hstpromote.py`, ported): the only writer of the accepted ledger. `lock`, `seed`, `promote [paths]`, `verify [--since REV]`, `migrate-toolchain --reason`, `retarget --reason`, `retract MODULE START --reason`. A proof comes only from a verification run in a fresh `build/proof/<run>/`: pre-checks (no `extra=`, a locked profile, whole functions of the locked inventory, lbpgate), `lbpmatch.py`, an independent re-compile that must give the matcher's object byte for byte (GCC's random-seed `_GLOBAL__I_` digits aside), and its own ELF reader's checks of the linked bytes against retail (code, placed `.rodata`/`.data`/`.sdata`, `.gnu.linkonce` objects, `.bss`/`.sbss` addresses, every linked symbol). One owner per byte; a promotion that would lose accepted bytes is refused. |
 | `lbpproof.py` | The accepted ledger and its locks (`data/target-manifest.json`, `data/toolchain-manifest.json`, `data/accepted-ledger.jsonl`, `data/accepted-journal.jsonl`): `status`, `check [--base REV] [--staged]`, `coverage`, `spans MODULE`. The toolchain lock records the profiles `src/` uses plus the primary, with SHA-256 of their kits (WSL and SNC), binutils, `include/` and the comparison code. `lbpcov.py --proofs` counts from it. |
 | `lbpbuild.py` | Whole-module build, tier T2 (design: `docs/PLAN.md`): every accepted source compiled by `lbpmatch.py` (object checked against its proof), reduced to its claimed code and compared data, linked in retail order at its retail address with retail-derived scaffolding for the rest (cut from your module at build time into `build/whole/`), the file assembled and compared by SHA-256; `report.json` and `provenance.json` (every byte: source or scaffolding). `--mode private\|public\|both`, `--reuse-match`, `--parallel 4`. T2 is reported only for a byte-identical image. |
+
+## SDK fingerprint catalogue
+
+LittleBigPlanet and Hot Shots Tennis link the same Sony SDK libraries, so a function matched in one decomp is often
+byte-identical, apart from relocations, to one in the other. `tools/lbpfingerprint.py` and hst-decomp's
+`tools/hstfingerprint.py` exchange identities of matched functions in one shared format, so either project's export
+can be read by the other's lookup (`lbpxclone.py` needs hst-decomp's tree and campaign on the same machine; a
+catalogue needs neither):
+
+```text
+python tools/lbpfingerprint.py export --out <private path>          # maintainers: from the accepted ledger
+python tools/lbpfingerprint.py lookup <the other project's catalogue> [--module EBOOT.BIN] [--json <private path>]
+```
+
+The catalogue is one JSON object:
+
+```json
+{
+ "format": "psp-decomp.sdk-fingerprints.v1",
+ "masking": "clone-analyse.v1",
+ "project": "lbp-psp-decomp",
+ "entries": [
+  {"instructions": 12, "masked_sha256": "<64 hex digits>", "source": "src/eboot/<name>_<addr8>.c",
+   "licence": "CC0-1.0", "module": "EBOOT.BIN", "start": "0x<addr8>", "cc": "gcc404xs-Os"}
+ ]
+}
+```
+
+- One entry per accepted proof (`tools/lbpproof.py`), sorted by `masked_sha256`. `instructions` is the number of
+  32-bit words in the proof's claimed range; `source`, `module`, `start` and `cc` (the effective compiler profile)
+  are the proof's; `licence` is the SPDX expression of the source's effective `REUSE.toml` annotation (the last one
+  whose path matches, as `lbpreuse.py check` decides).
+- `masked_sha256` is the SHA-256 of the masked signature that `tools/lbpclone.py`'s `analyse` computes from the
+  retail words, each word written as four little-endian bytes, in order. The masking (`clone-analyse.v1`, identical
+  in `lbpclone.py` and hst-decomp's `hstclone.py`): a `j`/`jal` keeps only its opcode bits; a `lui` keeps its
+  upper 16 bits (opcode and register) and marks its register as holding a high half until an instruction writes that
+  register; a word with a primary opcode of 8 or more whose `rs` field names such a register (the `%lo` half: an
+  `addiu`, `ori`, load or store) keeps its upper 16 bits; every other word is kept whole (branch offsets are
+  PC-relative and stay). In-title clone families and cross-title fingerprints are therefore the same relation.
+- A lookup matches on the pair (`instructions`, `masked_sha256`) and skips functions shorter than four instructions
+  (`--min-instructions`), which collide by chance. A reader refuses another `format` or `masking`; a change to
+  either is a new version, made in both projects together.
+
+The catalogue lists identities only and authorises no reuse. A proposed clone is a lead: port the named source with
+this title's addresses (for an hst-decomp source, `lbpxclone.py` does that where its tree is available), then it must
+pass `tools/lbpmatch.py` (EXACT) and the fake-match gate, and `tools/lbppromote.py` decides as for any source; the
+exemplar's licence travels with any code reused (a source under another licence needs its own `REUSE.toml` entry).
+Fingerprints derive from retail code, so a catalogue (or a proposal list) is never versioned: the tool writes only
+outside the repository or to a gitignored path (default `try/sdk-fingerprints-lbp-psp-decomp.json`), `.gitignore`
+ignores `sdk-fingerprints-*.json`, and `tools/lbpprcheck.py` refuses one in a pull request.
 
 ## Never
 
