@@ -108,7 +108,6 @@ def cmd_sample(args) -> int:
 
 
 def cmd_run(args) -> int:
-    sample = json.loads(SAMPLE.read_text(encoding="utf-8"))
     if args.src_set:
         # every GCC-profile source under src/ (not the fixed sample): how a candidate does on the current matches
         sample = {"gcc171": [], "gcc410": [], "miss": []}
@@ -117,6 +116,12 @@ def cmd_run(args) -> int:
             if cc.startswith("gcc"):
                 sample["gcc410" if cc.startswith("gcc4") else "gcc171"].append(
                     {"start": f"0x{h['start']:08x}", "end": f"0x{h['end']:08x}", "source": p.relative_to(ROOT).as_posix()})
+    elif not SAMPLE.exists():
+        # disc-derived (lbppublish.DISC_DERIVED), so a public checkout has none
+        raise SystemExit(f"{SAMPLE.relative_to(ROOT).as_posix()} does not exist: draw it with `lbpcceval.py sample`, or "
+                         "measure every GCC source under src/ with `run --src-set`")
+    else:
+        sample = json.loads(SAMPLE.read_text(encoding="utf-8"))
     profile = "gcc410-Os"   # a known profile name, whose driver and flags are replaced for this run only
     M.gcc_profiles()[profile] = {"driver": args.driver, "B": args.B, "flags": args.flags}
     run_dir = WORK / "runs" / args.name
