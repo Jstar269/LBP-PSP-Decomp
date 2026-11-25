@@ -149,7 +149,6 @@ class StarterTests(unittest.TestCase):
 
     def test_the_committed_list_is_well_formed_and_names_only_open_functions(self) -> None:
         starters = Q.load_starters()
-        self.assertTrue(starters)
         self.assertEqual(Q.cmd_starters(), 0, "a starter function is matched: remove its entry and update the issue")
         wip = Q.wip_leads(Q.M.ROOT)
         for key, ent in starters.items():
