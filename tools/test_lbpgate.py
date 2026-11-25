@@ -132,5 +132,157 @@ class WiringTests(unittest.TestCase):
                          {("asm-emit", G.REFUSE)})
 
 
+class EmptyBarrierIsThisStatementTests(unittest.TestCase):
+    def test_an_emitting_asm_followed_by_a_barrier_is_refused(self) -> None:
+        # the barrier idiom must describe the asm statement itself, not a barrier written after it
+        text = 'void f(void) { asm("addiu $2,$2,1"); asm("" ::: "memory"); }\n'
+        self.assertEqual(refused(text), {"asm-emit"})
+        text = 'void f(void) {\n    __asm__ volatile ("addiu $2,$2,1");\n    __asm__ volatile ("" : : : "memory");\n}\n'
+        self.assertEqual(refused(text), {"asm-emit"})
+        self.assertEqual(kinds('void f(void) { __asm__ __volatile__ ("" ::: "memory"); }'), {"empty-asm-barrier"})
+
+
+class VfpuTemplateEscapeTests(unittest.TestCase):
+    """An octal or hex escape is a newline or a `;` to the assembler: it must not hide a second instruction."""
+    HEADER = {"module": "EBOOT.BIN", "start": "0x0", "end": "0x4", "symbol": "f", "asm": "vfpu"}
+    REASON = "/* Original inline VFPU asm: the SDK vector helper. */\n"
+
+    def found(self, template: str) -> set[tuple[str, str]]:
+        text = self.REASON + 'void f(float *p) { __asm__ volatile("' + template + '" : : "r"(p)); }\n'
+        return {(f.kind, f.severity) for f in G.check_text(text, self.HEADER, "src")}
+
+    def test_escaped_separators_do_not_hide_an_instruction(self) -> None:
+        b = chr(92)
+        for sep in (b + "012", b + "12", b + "x0a", b + "x0A", b + "073", b + "x3b", b + "r", b + "v", b + "f"):
+            with self.subTest(sep=sep):
+                self.assertEqual(self.found("vmov.s S000, S001" + sep + "addiu $2, $2, 1"), {("asm-emit", G.REFUSE)})
+
+    def test_plain_escapes_are_still_read(self) -> None:
+        b = chr(92)
+        self.assertEqual(self.found("lv.s S000, 0(%0)" + b + "n" + b + "tvmov.s S001, S000" + b + "n"),
+                         {("vfpu-inline-asm", G.IDIOM)})
+        self.assertEqual(self.found("lv.s S000, 0(%0)" + b + "012vmov.s S001, S000"), {("vfpu-inline-asm", G.IDIOM)})
+
+
+class TextSectionSpellingTests(unittest.TestCase):
+    """Every spelling of a section attribute GCC accepts, and a section name the gate cannot read, is refused."""
+
+    def test_other_spellings_of_a_text_section_are_refused(self) -> None:
+        for text in ('const unsigned code[] __attribute__((__section__(".text"))) = { 0x27bdffe0 };',
+                     'const unsigned code[] __attribute__((section(" .text.f"))) = { 0x27bdffe0 };',
+                     '#define SEC ".text"\nconst unsigned code[] __attribute__((section(SEC))) = { 0x27bdffe0 };',
+                     'const unsigned code[] __attribute__((section("." "text"))) = { 0x27bdffe0 };',
+                     '#define IN(s) __attribute__((__section__(s)))\nconst unsigned code[] IN(".text") = { 1 };',
+                     '#pragma define_section mytext ".text" ".text"\n',
+                     '%:pragma section ".text"\n',
+                     '_Pragma("section \\".text\\"")\n'):
+            with self.subTest(text=text):
+                self.assertEqual(refused(text), {"text-section"})
+
+    def test_a_named_data_section_is_still_fine(self) -> None:
+        self.assertEqual(kinds('extern int *p __attribute__((__section__(".sdata")));\n'
+                               'int q __attribute__((aligned(4), section(".sbss")));\n'), set())
+
+
+class LineSpliceTests(unittest.TestCase):
+    """A backslash-newline joins two lines before the compiler reads a token: the gate reads the joined line too."""
+
+    def test_a_keyword_split_by_a_line_splice_is_refused(self) -> None:
+        b = chr(92)
+        self.assertEqual(refused('void f(void) { as' + b + '\nm("addiu $2,$2,1"); }\n'), {"asm-emit"})
+        self.assertEqual(refused('void f(void) { __as' + b + '\nm__ volatile ("addiu $2,$2,1"); }\n'), {"asm-emit"})
+        self.assertEqual(refused('#pra' + b + '\ngma asm\n'), {"pragma-code"})
+        self.assertEqual(refused('const char *s = ".wo' + b + '\nrd 1";\n'), {"data-directive"})
+
+    def test_a_backslash_with_trailing_blanks_is_refused(self) -> None:
+        self.assertEqual(refused('// note ' + chr(92) + '  \nint x;\n'), {"loose-line-splice"})
+
+    def test_multi_line_macros_keep_their_line_numbers(self) -> None:
+        b = chr(92)
+        text = '#define ADD(a, b) ' + b + '\n    ((a) + ' + b + '\n     (b))\nint f(int x) { return ADD(x, 1); }\nasm("nop");\n'
+        self.assertEqual(G.splice_lines(text).count("\n"), text.count("\n"))
+        self.assertEqual([(f.kind, f.line) for f in G.check_text(text, None, "src")], [("asm-emit", 5)])
+
+
+class TokenPasteTests(unittest.TestCase):
+    """`##` can build the asm keyword out of tokens the gate never sees as one."""
+
+    def test_a_paste_that_can_spell_asm_is_refused(self) -> None:
+        for text in ('#define CAT(a, b) a##b\nvoid f(void) { CAT(as, m)("addiu $2,$2,1"); }\n',
+                     '#define K(x) as ## x\nvoid f(void) { K(m)("addiu $2,$2,1"); }\n',
+                     '#define K(x) x##m__\nvoid f(void) { K(__as)("addiu $2,$2,1"); }\n',
+                     '#define K __as##m__\nvoid f(void) { K("addiu $2,$2,1"); }\n',
+                     '#define K(...) __VA_ARGS__ ## sm\n'):
+            with self.subTest(text=text):
+                self.assertEqual(refused(text), {"asm-paste"})
+
+    def test_a_paste_that_cannot_spell_asm_is_fine(self) -> None:
+        self.assertEqual(kinds('#define V(n) virtual void v##n();\n#define FLD(n) unk_##n\nstruct S { int FLD(14); };\n'),
+                         set())
+
+
+class IncludeTests(unittest.TestCase):
+    """Every directive that reads a file is checked, and so is what a repository header holds."""
+
+    def test_every_include_form_is_checked(self) -> None:
+        for text in ('#include_next "table.inc"\n', '#import "table.inc"\n', '%:include "table.inc"\n',
+                     '??=include "table.inc"\n', '#define F "table.inc"\n#include F\n'):
+            with self.subTest(text=text):
+                self.assertEqual(refused(text), {"binary-include"})
+        self.assertEqual(kinds('#include_next <limits.h>\n%:include "x.h"\n'), set())
+
+    def test_a_header_the_source_includes_is_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "src" / "m").mkdir(parents=True)
+            (root / "include" / "g").mkdir(parents=True)
+            (root / "src" / "m" / "evil.h").write_text('static void g(void) { asm("addiu $2,$2,1"); }\n', encoding="utf-8")
+            (root / "include" / "g" / "sec.h").write_text('#include "deeper.h"\n', encoding="utf-8")
+            (root / "include" / "g" / "deeper.h").write_text(
+                'const unsigned c[] __attribute__((section(".text"))) = { 1 };\n', encoding="utf-8")
+            (root / "include" / "g" / "ok.h").write_text('struct S { int a; };\n', encoding="utf-8")
+            (root / "src" / "m" / "a.c").write_text('#include "evil.h"\nint x;\n', encoding="utf-8")
+            (root / "src" / "m" / "b.c").write_text('#include <g/sec.h>\nint x;\n', encoding="utf-8")
+            (root / "src" / "m" / "c.c").write_text('#include <g/ok.h>\n#include <string.h>\nint x;\n', encoding="utf-8")
+            found = G.refusals(G.check_file(root / "src" / "m" / "a.c", root))
+            self.assertEqual([(f.kind, f.line) for f in found], [("asm-emit", 1)])
+            self.assertIn("src/m/evil.h:1:", found[0].text)
+            self.assertEqual(G.summary(G.check_file(root / "src" / "m" / "b.c", root)), "text-section")
+            self.assertEqual(G.check_file(root / "src" / "m" / "c.c", root), [])
+
+
+class AsmInPreprocessorLineTests(unittest.TestCase):
+    """Only a #pragma line is left to pragma-code: an asm in a #define (or any other directive) is still an asm."""
+
+    def test_asm_in_a_define_is_checked(self) -> None:
+        text = '#define BUMP() __asm__ volatile ("addiu $2, $2, 1")\nvoid f(void) { BUMP(); }\n'
+        self.assertEqual(refused(text), {"asm-emit"})
+        self.assertEqual(refused('#  define EMIT asm("nop")\nvoid f(void) { EMIT; }\n'), {"asm-emit"})
+        self.assertEqual(refused("#pragma asm\n"), {"pragma-code"})
+
+
+class VfpuTemplateIsLiteralTests(unittest.TestCase):
+    """A template the gate checks must be string literals only: a macro or a stringified argument in it adds text
+    the gate never reads."""
+    HEADER = {"asm": "vfpu"}
+    REASON = "/* Original inline VFPU asm: the vector math header. */\n"
+
+    def found(self, text: str) -> set[tuple[str, str]]:
+        return {(f.kind, f.severity) for f in G.check_text(self.REASON + text, self.HEADER, "src")}
+
+    def test_a_template_built_from_a_macro_is_refused(self) -> None:
+        b = chr(92)
+        for text in ('#define X "addiu $2, $2, 1' + b + 'n"\nvoid f(void) { __asm__ volatile(X "vmov.s S000, S001"); }\n',
+                     '#define S(x) #x\nvoid f(void) { __asm__ volatile(S(addiu $2, $2, 1;) "vmov.s S000, S001"); }\n',
+                     'void f(void) { __asm__ volatile(("vmov.s S000, S001")); }\n'):
+            with self.subTest(text=text):
+                self.assertEqual(self.found(text), {("asm-emit", G.REFUSE)})
+
+    def test_a_literal_template_is_still_the_idiom(self) -> None:
+        b = chr(92)
+        self.assertEqual(self.found('void f(float *d, float *s) { __asm__("lv.q C000, %1' + b + 'n sv.s S000, %0" '
+                                    ': "=m"(d[0]) : "m"(*s)); }\n'), {("vfpu-inline-asm", G.IDIOM)})
+
+
 if __name__ == "__main__":
     unittest.main()
