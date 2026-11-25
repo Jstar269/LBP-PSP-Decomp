@@ -26,7 +26,9 @@ def object_functions(path: Path):
     obj = path.read_bytes()
     sections = M.elf_sections(obj)
     for i, (name, s) in enumerate(sections):
-        if not name.startswith(".text") or not s[5]:
+        # every code input section ld places (tools/lbpmatch.py CODE_INPUT), including the `.gnu.linkonce.t.*` that
+        # GCC 4.0 gives each inline function and implicit member, not only the `.text*` ones
+        if s[1] != 1 or not M.CODE_INPUT.fullmatch(name) or not s[5]:
             continue
         data = obj[s[4]:s[4] + s[5]]
         syms = sorted((v, sz, n) for n, v, sz, info, sh in M.elf_symbols(obj) if sh == i and info & 15 == 2 and sz >= 4)
