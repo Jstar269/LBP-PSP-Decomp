@@ -250,22 +250,52 @@ def retail_call_args(start: int) -> dict[int, list[list[str | None]]] | None:
     def is_likely(w):
         return op(w) in (0x14, 0x15, 0x16, 0x17) or (op(w) == 1 and rt(w) in (2, 3, 0x12, 0x13))
 
+    def is_call(w):  # jal, jalr, bltzal/bgezal(l): a0..a3 do not survive it
+        return op(w) == 3 or (op(w) == 0 and (w & 0x3F) == 9) or (op(w) == 1 and rt(w) in (0x10, 0x11, 0x12, 0x13))
+
+    def written(w):
+        """The registers w writes (an encoding not known to leave rt alone counts rt as written)."""
+        if op(w) == 0:
+            return set() if (w & 0x3F) in (8, 0x18, 0x19, 0x1A, 0x1B) else {rd(w)}
+        if op(w) == 0x1F and (w & 0x3F) == 0x20:  # seb/seh/wsbh/bitrev write rd from rt
+            return {rd(w)}
+        if op(w) in (1, 2, 3, 4, 5, 6, 7, 0x14, 0x15, 0x16, 0x17, 0x28, 0x29, 0x2B, 0x39):
+            return set()
+        return {rt(w)}
+
     targets = set()
+    back_edges = []  # (branch index, target index <= branch index): a loop
     for k, w in enumerate(words):
         if is_flow(w) and not is_call_or_jump(w):
-            targets.add(k + 1 + _sext(w & 0xFFFF))
-    saved = {}  # prologue: sN <- param
-    for w in words[:16]:
-        if is_move(w) and 16 <= rd(w) <= 23 and 4 <= rs(w) <= 7:
-            saved.setdefault(rd(w), f"param_{rs(w) - 3}")
-    # a-registers still holding the incoming parameter (no write and no call anywhere before, in address order)
-    intact_until = {}
-    for r in range(4, 8):
-        k = next((k for k, w in enumerate(words) if op(w) == 3 or (op(w) == 0 and (w & 0x3F) == 9) or
-                  (op(w) == 0 and rd(w) == r and (w & 0x3F) not in (8, 0x18, 0x19, 0x1A, 0x1B))
-                  or (op(w) not in (0, 1, 2, 3, 4, 5, 6, 7, 0x14, 0x15, 0x16, 0x17, 0x28, 0x29, 0x2B, 0x39)
-                      and rt(w) == r)), len(words))
-        intact_until[r] = k
+            t = k + 1 + _sext(w & 0xFFFF)
+        elif op(w) == 2:  # `j` between blocks (GCC code): its target is a join point too
+            t = ((((start + 4 * k + 4) & 0xF0000000) | ((w & 0x03FFFFFF) << 2)) - start) // 4
+            if not 0 <= t < len(words):
+                continue  # a tail call
+        else:
+            continue
+        targets.add(t)
+        if 0 <= t <= k:
+            back_edges.append((k, t))
+
+    def until(r, first, skip=None):
+        """Last index (in address order) at which r still holds the value it had at `first`: the first later write,
+        cut back to the head of every loop that writes r (the value is gone when the loop comes round again)."""
+        clobbers = (lambda w: is_call(w) or r in written(w)) if 4 <= r <= 7 else (lambda w: r in written(w))
+        k = next((k for k in range(first, len(words)) if k != skip and clobbers(words[k])), len(words))
+        for b, t in back_edges:
+            if any(x != skip and clobbers(words[x]) for x in range(t, min(b + 2, len(words)))):
+                k = min(k, t - 1)
+        return k
+
+    # a-registers still holding the incoming parameter (no write and no call before, nor in a loop around the use)
+    intact_until = {r: until(r, 0) for r in range(4, 8)}
+    saved, saved_until = {}, {}  # prologue: sN <- param, valid until sN is written again
+    for p, w in enumerate(words[:16]):
+        if (is_move(w) and 16 <= rd(w) <= 23 and 4 <= rs(w) <= 7 and rd(w) not in saved
+                and p <= intact_until[rs(w)]):
+            saved[rd(w)] = f"param_{rs(w) - 3}"
+            saved_until[rd(w)] = until(rd(w), p + 1, skip=p)
     out: dict[int, list[list[str | None]]] = {}
     for i, w in enumerate(words):
         if op(w) != 3:
@@ -289,7 +319,7 @@ def retail_call_args(start: int) -> dict[int, list[list[str | None]]] | None:
 
         def base_expr(reg, at):
             """The parameter a base register holds at instruction `at`, if known."""
-            if reg in saved:
+            if reg in saved and at <= saved_until[reg]:
                 return saved[reg]
             if 4 <= reg <= 7 and at <= intact_until[reg]:
                 return f"param_{reg - 3}"
@@ -319,6 +349,11 @@ def retail_call_args(start: int) -> dict[int, list[list[str | None]]] | None:
                 regs[rt(x)] = f"*(int *)((int){base_expr(rs(x), at)} + {_sext(x & 0xFFFF)})"
             elif o == 0 and 4 <= rd(x) <= 7:
                 regs[rd(x)] = None
+            elif o == 0x1F and (x & 0x3F) == 0x20:  # seb/seh/wsbh/bitrev: rd written, rt only read
+                if 4 <= rd(x) <= 7:
+                    regs[rd(x)] = None
+            elif o == 0x11 and rs(x) in (0, 2) and 4 <= rt(x) <= 7:  # mfc1/cfc1
+                regs[rt(x)] = None
             elif o not in (0, 1, 4, 5, 6, 7, 0x14, 0x15, 0x16, 0x17, 0x28, 0x29, 0x2B, 0x39, 0x11) and 4 <= rt(x) <= 7:
                 regs[rt(x)] = None
         n = max([r - 3 for r in regs if 4 <= r <= 7] + [callee_arity(target)], default=0)
