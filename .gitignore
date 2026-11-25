@@ -57,3 +57,5 @@ keys/
 # is published (owner decision 2026-11-01): a contribution never changes it (tools/lbpprcheck.py).
 /data/functions-*.txt
 !/data/functions-EBOOT.BIN.txt
+# SDK fingerprint catalogues and proposals (tools/lbpfingerprint.py): derived from retail code, never versioned.
+sdk-fingerprints-*.json

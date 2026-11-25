@@ -11,7 +11,9 @@ adds or changes:
   place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json,
                   the disc-derived files tools/lbppublish.py keeps private (DISC_DERIVED); also a change to the
                   published function boundary list (FUNCTION_LISTS: the maintainers decide boundaries) or the
-                  translation-unit map (UNIT_MAPS, tools/lbptu.py)
+                  translation-unit map (UNIT_MAPS, tools/lbptu.py); an SDK fingerprint catalogue
+                  (sdk-fingerprints-*.json, tools/lbpfingerprint.py)
+  catalogue       a JSON file that holds such a catalogue under another name: fingerprints derive from retail code
   size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big); the
                   generated objdiff report (docs/objdiff-report.json, one unit per function) has a 32 MiB limit
   report          that report when its units do not add up to its module figures (tools/lbpreport.py unit_problems)
@@ -55,7 +57,10 @@ REPORT_MAX_BYTES = 32 << 20
 BINARY_SUFFIXES = {".o", ".obj", ".elf", ".bin", ".prx", ".pbp", ".iso", ".cso", ".exe", ".dll", ".so", ".a", ".zip",
                    ".7z", ".gz", ".tar", ".gzf", ".rep", ".img", ".dat", ".sfo", ".at3", ".pmf"}
 NEVER = (re.compile(r"^(build|try|keys|inputs|campaign|analysis)/"), re.compile(r"^ghidra/(projects|out|cache|settings)/"),
-         re.compile(r"(^|/)[^/]*keyfile[^/]*$", re.I), re.compile(rf"^{re.escape(CONFIG)}$"))
+         re.compile(r"(^|/)[^/]*keyfile[^/]*$", re.I), re.compile(rf"^{re.escape(CONFIG)}$"),
+         re.compile(r"(^|/)sdk-fingerprints-[^/]*\.json$"))
+# the format marker of tools/lbpfingerprint.py catalogues and proposals (shared with hst-decomp)
+FINGERPRINTS = re.compile(rb'"format"\s*:\s*"psp-decomp\.sdk-fingerprints\.')
 PRIVATE = re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+(?!<)\w|/home/(?!<|user\b)\w|/mnt/[a-z]/Users/(?!<)\w|"
                      r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\bghp_[A-Za-z0-9]{20}|\bgithub_pat_\w{20}|"
                      r"\bsk-[A-Za-z0-9]{20}|\bAKIA[0-9A-Z]{16}\b")
@@ -134,6 +139,9 @@ def check(repo: Path, base: str) -> list[str]:
             continue
         if b"\0" in data:
             refusals.append(f"binary   {path}: holds NUL bytes")
+            continue
+        if path.lower().endswith(".json") and FINGERPRINTS.search(data):
+            refusals.append(f"catalogue {path}: an SDK fingerprint catalogue (derived from retail code) is never versioned")
             continue
         added = added_lines(repo, base, path)
         for line in added:
