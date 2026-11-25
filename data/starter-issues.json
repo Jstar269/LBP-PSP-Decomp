@@ -1,0 +1,8 @@
+{
+ "schema": "lbp-decomp.starter-issues.v1",
+ "description": "Functions that an open good first issue offers to new contributors. tools/lbpqueue.py reserves each one, so lane batches never include it, and tools/lbpnearperm.py never permutes it. Remove an entry when its issue closes; `python tools/lbpqueue.py starters` lists the entries a source now covers.",
+ "entries": [
+  {"module": "EBOOT.BIN", "start": "0x0880b604", "issue": 2, "notes": "wip/lane_lbp5b_0880b604.c"},
+  {"module": "EBOOT.BIN", "start": "0x08875f1c", "issue": 2, "notes": "wip/lane_lbp5b_08875f1c.c"}
+ ]
+}

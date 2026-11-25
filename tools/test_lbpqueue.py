@@ -90,5 +90,71 @@ class FileTests(unittest.TestCase):
         self.assertEqual(attempted, {0x2000, 0x2100})   # 0x2200 was never reached: free again
 
 
+class StarterTests(unittest.TestCase):
+    """Functions an open good first issue holds for new contributors are reserved until a source covers them."""
+
+    HEADER = "/* LBPMATCH module=EBOOT.BIN start=0x{0:08x} end=0x{1:08x} symbol=FUN_{0:08x} lang=c99 */\nint x;\n"
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "data").mkdir()
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def write(self, entries: list, schema: str = Q.STARTER_SCHEMA) -> None:
+        (self.root / "data" / "starter-issues.json").write_text(json.dumps({"schema": schema, "entries": entries}),
+                                                                 encoding="utf-8")
+
+    def test_rejects_malformed_entries_duplicates_and_wrong_schema(self) -> None:
+        self.assertEqual(Q.load_starters(self.root), {})                  # no file: no starters
+        entry = {"module": "EBOOT.BIN", "start": "0x0880b604", "issue": 2}
+        self.write([entry])
+        self.assertEqual(list(Q.load_starters(self.root)), [("EBOOT.BIN", 0x0880B604)])
+        self.assertEqual(Q.starter_starts("EBOOT.BIN", self.root), {0x0880B604})
+        self.assertEqual(Q.starter_starts("other.prx", self.root), set())
+        for bad in ([entry, entry], [dict(entry, bytes="00")], [dict(entry, issue="2")], [dict(entry, issue=True)],
+                    [dict(entry, issue=0)], [dict(entry, start="0x880b604")], [dict(entry, module="")],
+                    [dict(entry, notes=1)]):
+            self.write(bad)
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                Q.load_starters(self.root)
+        self.write([entry], schema="other")
+        with self.assertRaises(ValueError):
+            Q.load_starters(self.root)
+
+    def test_a_starter_and_its_clone_family_are_never_queued(self) -> None:
+        class Args:
+            flag, exclude, min_size, max_size, include_snc = None, [], 0, 4096, False
+
+        funcs = {s: {"start": s, "end": s + 48, "size": 48,
+                     "flags": {"ins_zero": 0, "vfpu": 0, "unaligned": 0, "div": 0}} for s in (0x1000, 0x2000, 0x3000, 0x4000)}
+        ctx = {"funcs": funcs, "family_of": {0x3000: [0x3000, 0x4000], 0x4000: [0x3000, 0x4000]}, "have": set(),
+               "reserved": {0x2000, 0x4000}, "attempted": set(), "gen": {}, "snc": set(), "lib": {},
+               "wip": {("EBOOT.BIN", s): ["wip/x.c"] for s in funcs}, "names": {}}
+        self.assertEqual(Q.rank(ctx, "EBOOT.BIN", "near", Args()), [0x1000])
+        self.assertEqual(Q.rank(ctx, "EBOOT.BIN", "families", Args()), [])
+
+    def test_the_check_flags_a_starter_that_a_source_now_covers(self) -> None:
+        (self.root / "src" / "eboot").mkdir(parents=True)
+        (self.root / "wip").mkdir()
+        (self.root / "src" / "eboot" / "a_08840f44.c").write_text(self.HEADER.format(0x08840F44, 0x08840F64), encoding="utf-8")
+        (self.root / "wip" / "b_0880b604.c").write_text(self.HEADER.format(0x0880B604, 0x0880B634), encoding="utf-8")
+        self.write([{"module": "EBOOT.BIN", "start": "0x0880b604", "issue": 2}])
+        self.assertEqual(Q.cmd_starters(self.root), 0)
+        self.write([{"module": "EBOOT.BIN", "start": "0x0880b604", "issue": 2},
+                    {"module": "EBOOT.BIN", "start": "0x08840f44", "issue": 2}])
+        self.assertEqual(Q.cmd_starters(self.root), 1)
+
+    def test_the_committed_list_is_well_formed_and_names_only_open_functions(self) -> None:
+        starters = Q.load_starters()
+        self.assertTrue(starters)
+        self.assertEqual(Q.cmd_starters(), 0, "a starter function is matched: remove its entry and update the issue")
+        wip = Q.wip_leads(Q.M.ROOT)
+        for key, ent in starters.items():
+            self.assertTrue(wip.get(key), f"#{ent['issue']} 0x{key[1]:08x} has no wip/ file for the issue to point at")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,9 @@ Seeds must have one of --classes, one of --levers (default: the levers whose cal
 with retail), at most --max-left words left, and (with --profiles) one of those cc= profiles. A file whose calls or
 branches differ (lever body or structure) or whose only difference is a symbol (referent) is not a permuter problem,
 so it is left out unless it is named on the command line. Files src/ already covers, addresses reserved by an
-unfinished lane batch (lbpqueue.reservations), and headers with extra= or helpers= are never seeded.
+unfinished lane batch (lbpqueue.reservations), functions an open good first issue holds for new contributors
+(data/starter-issues.json, even when named on the command line), and headers with extra= or helpers= are never
+seeded.
 
 Profile phase (the GCC analogue of hstnearperm's MWCC pragma phase; --no-profile-phase skips it): after the rounds,
 the best text of every open seed is compiled once under each other LOCKED profile of data/toolchain-manifest.json,
@@ -111,7 +113,9 @@ def main() -> int:
                   args.max_words, chosen)
     covered = L.covered(ROOT)
     reserved = reserved_addresses()
-    seeds, skipped = [], {"reserved": 0, "not_a_seed": 0}
+    import lbpqueue as Q
+    starters = Q.load_starters(ROOT)   # outside reserved_addresses(): a broken list must stop the run, not be skipped
+    seeds, skipped = [], {"reserved": 0, "starter": 0, "not_a_seed": 0}
     for row in rows:
         got = P.wip_seed(ROOT / row["wip"], covered, 1 << 30)
         if got is None:
@@ -119,6 +123,9 @@ def main() -> int:
             continue
         if got[0][1] in reserved:
             skipped["reserved"] += 1
+            continue
+        if got[0] in starters:
+            skipped["starter"] += 1
             continue
         seeds.append((row, got))
     if args.limit:

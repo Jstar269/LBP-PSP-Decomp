@@ -4,6 +4,7 @@
     python tools/lbpqueue.py --name lbp1 --kind families|near|singles|library [--module EBOOT.BIN]
                              [--batches 1] [--per-batch 25] [--min-size 32] [--max-size 1024]
                              [--include-snc] [--exclude 0xADDR,...] [--dry-run]
+    python tools/lbpqueue.py starters        # list data/starter-issues.json; flag entries a source now covers
 
 Writes try/agent-queue/<name>-NN.json (NN from 01), each {"module", "kind", "name", "made", "items": [...]}; an item
 has address, end, size, family (the other members' starts), pseudocode (absolute path of the Ghidra export, advisory),
@@ -36,7 +37,9 @@ keeps only functions with that flag, and offers attempted ones again (lanes skip
 
 Reserved / attempted (so batches made at different times stay disjoint): every address of a batch under
 try/agent-queue/ that no lane took yet, and of a lane under ext_root that is not harvested (no try/harvest-<lane>/),
-is reserved, and so is every --exclude address (and its family). In a harvested lane, an address with a PROGRESS.md
+is reserved, and so is every --exclude address (and its family), and every function that an open good first issue
+holds for new contributors (data/starter-issues.json; the reservation lapses once a source covers it, and
+`lbpqueue.py starters` lists the entries to remove). In a harvested lane, an address with a PROGRESS.md
 line (EXACT, NEAR or SKIP) is attempted and not offered again (a NEAR comes back through its wip/ file in the near
 kind); an address the lane never reached is free.
 """
@@ -57,6 +60,8 @@ import lbpmatch as M
 import lbpproject as P
 
 QUEUE = M.ROOT / "try" / "agent-queue"
+STARTER_SCHEMA = "lbp-decomp.starter-issues.v1"
+STARTER_RELPATH = Path("data") / "starter-issues.json"
 GHIDRA = M.ROOT / "ghidra" / "out"
 NEAR_RATIO = 0.35
 LIBRARY_NAME = re.compile(r"^(?:_Z|__|_[a-z]|inflate|deflate|adler32|crc32|zcalloc|zcfree|mem|str|mb|wc|_?[a-z]+_r$)")
@@ -180,6 +185,61 @@ def reservations(root: Path, lanes: list[Path], queue: Path) -> tuple[set[int], 
     return reserved, attempted
 
 
+def load_starters(root: Path = M.ROOT) -> dict[tuple[str, int], dict]:
+    """{(module, start): entry} from data/starter-issues.json (module, start, issue number, optional notes): the
+    functions an open good first issue holds for new contributors. A missing file means none; a malformed file is an
+    error, never an empty list, because an empty list would hand the starter functions back to the lanes."""
+    path = root / STARTER_RELPATH
+    if not path.exists():
+        return {}
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if doc.get("schema") != STARTER_SCHEMA or not isinstance(doc.get("entries"), list):
+        raise ValueError(f"{path}: not a {STARTER_SCHEMA} document")
+    out: dict[tuple[str, int], dict] = {}
+    for entry in doc["entries"]:
+        extra = set(entry) - {"module", "start", "issue", "notes"}
+        if (extra or not isinstance(entry.get("module"), str) or not entry["module"]
+                or not isinstance(entry.get("start"), str) or not re.fullmatch(r"0x[0-9a-f]{8}", entry["start"])
+                or type(entry.get("issue")) is not int or entry["issue"] <= 0
+                or not isinstance(entry.get("notes", ""), str)):
+            raise ValueError(f"{path}: malformed entry {entry!r}")
+        key = (entry["module"], int(entry["start"], 16))
+        if key in out:
+            raise ValueError(f"{path}: duplicate entry for {entry['module']} {entry['start']}")
+        out[key] = entry
+    return out
+
+
+def starter_starts(module: str, root: Path = M.ROOT) -> set[int]:
+    """Starts of the module's starter functions (reserved: never queued, never permuted)."""
+    return {start for (m, start) in load_starters(root) if m == module}
+
+
+def cmd_starters(root: Path = M.ROOT) -> int:
+    """List the starter functions; exit 1 when a source now covers one (its entry, and maybe its issue, can close)."""
+    starters = load_starters(root)
+    src: dict[tuple[str, int], str] = {}
+    for p in sorted((root / "src").rglob("*")) if (root / "src").is_dir() else []:
+        if p.suffix in (".c", ".cpp"):
+            try:
+                h = M.parse_header(p)
+            except ValueError:
+                continue
+            src[(h["module"], h["start"])] = p.relative_to(root).as_posix()
+    wip = wip_leads(root)
+    done = 0
+    for (module, start), ent in sorted(starters.items(), key=lambda kv: (kv[1]["issue"], kv[0])):
+        if (module, start) in src:
+            done += 1
+            print(f"DONE    #{ent['issue']} {module} 0x{start:08x}: covered by {src[(module, start)]}; "
+                  f"remove the entry (and any wip/ file left for it), and update the issue")
+        else:
+            files = wip.get((module, start), [])
+            print(f"open    #{ent['issue']} {module} 0x{start:08x}: {', '.join(files) if files else 'no wip/ file'}")
+    print(f"{len(starters)} starter functions, {done} covered by a source")
+    return 1 if done else 0
+
+
 def symbol_names(module: str) -> dict[int, str]:
     out: dict[int, str] = {}
     for name, addr in M.load_symbols(module).items():
@@ -220,6 +280,7 @@ def collect(module: str) -> dict:
             for s in starts:
                 family_of[s] = sorted(starts)
     reserved, attempted = reservations(M.ROOT, lane_dirs(), QUEUE)
+    reserved |= starter_starts(module)
     return {"funcs": funcs, "family_of": family_of, "have": have, "reserved": reserved, "attempted": attempted,
             "gen": best_generated(M.ROOT), "pseudo": pseudocode(GHIDRA, module_dir), "lib": library_hits(M.ROOT),
             "wip": wip_leads(M.ROOT), "names": symbol_names(module), "snc": snc_starts(M.ROOT)}
@@ -367,6 +428,8 @@ def readability_batches(args) -> int:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "starters":
+        return cmd_starters()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--name", required=True)
     ap.add_argument("--kind", required=True, choices=("families", "near", "singles", "library", "readability"))
