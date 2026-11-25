@@ -45,6 +45,8 @@ refuses by name what it does not model. `--interp nakagawa` runs both sides in N
 interpreter instead (its `run_elf` program, run as a separate program: set LBPCHECK_RUN_ELF to a run_elf built with
 `make run_elf` in your Nakagawa checkout); it models only its 64 MiB RAM at 0x08000000, which holds the EBOOT, the
 scratch region and the stack, so LBP functions can run there; a function whose memory lies elsewhere is NOT_CHECKED.
+Nakagawa Recomp is a separate project under GPL-3.0-or-later: no code of it is in this repository or imported
+here; this option only starts the run_elf you built yourself and reads its output.
 
 Exit status: 0 when every function is SAME_RESULTS, 1 when any is DIFFERENT, 2 otherwise (not checked, usage).
 """

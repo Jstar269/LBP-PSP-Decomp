@@ -112,6 +112,9 @@ tool, its states and its output are the same as hst-decomp's `tools/hstcheck.py`
   Recomp's reference interpreter instead, as a separate program: build `run_elf` there (`make run_elf`) and set
   `LBPCHECK_RUN_ELF` to it. That interpreter models RAM at 0x08000000-0x0bffffff, which holds the EBOOT; the unit tests
   use it to cross-check the two interpreters on synthetic code when it is available.
+  Nakagawa Recomp is a separate project under GPL-3.0-or-later. None of its code is in this repository and no tool
+  here imports it: `--interp nakagawa` only starts a `run_elf` that you build from your own Nakagawa checkout and
+  reads its output, and the option is off unless you ask for it. That program stays under its own licence.
 
 ## Tools
 
