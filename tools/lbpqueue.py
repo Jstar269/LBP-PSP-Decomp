@@ -38,8 +38,8 @@ keeps only functions with that flag, and offers attempted ones again (lanes skip
 Reserved / attempted (so batches made at different times stay disjoint): every address of a batch under
 try/agent-queue/ that no lane took yet, and of a lane under ext_root that is not harvested (no try/harvest-<lane>/),
 is reserved, and so is every --exclude address (and its family), and every function that an open good first issue
-holds for new contributors (data/starter-issues.json; the reservation lapses once a source covers it, and
-`lbpqueue.py starters` lists the entries to remove). In a harvested lane, an address with a PROGRESS.md
+holds for new contributors (data/starter-issues.json; remove an entry once its issue no longer holds it, even
+if `lbpqueue.py starters` already reports it as covered). In a harvested lane, an address with a PROGRESS.md
 line (EXACT, NEAR or SKIP) is attempted and not offered again (a NEAR comes back through its wip/ file in the near
 kind); an address the lane never reached is free.
 """
@@ -256,14 +256,11 @@ def snc_starts(root: Path) -> set[int]:
     return {int(t, 16) for t in f.read_text(encoding="utf-8").split() if re.fullmatch(r"(?:0x)?[0-9a-fA-F]+", t)}
 
 
-def collect(module: str) -> dict:
-    """Every usable function of the module with its features, plus the family table and the exclusion sets."""
+def collect_function_families(module: str) -> tuple[dict[int, dict], dict[int, list[int]]]:
+    """Read the usable functions for a module and group them by their masked code signature."""
     ledger = json.loads((M.campaign_root() / "ledger" / "campaign.json").read_text(encoding="utf-8-sig"))
     mod = next(m for m in ledger["modules"] if m["name"] == module)
     data, seg = M.module_bytes({}, module)
-    module_dir = re.sub(r"\W", "_", module)
-    have = {M.parse_header(p)["start"] for p in (M.ROOT / "src").rglob("*")
-            if p.suffix in (".c", ".cpp") and M.parse_header(p)["module"] == module}
     funcs: dict[int, dict] = {}
     families: dict[tuple, list[int]] = defaultdict(list)
     for f in mod["functions"]:
@@ -280,6 +277,15 @@ def collect(module: str) -> dict:
         if len(starts) >= 2:
             for s in starts:
                 family_of[s] = sorted(starts)
+    return funcs, family_of
+
+
+def collect(module: str) -> dict:
+    """Every usable function with its features, family and exclusion sets."""
+    funcs, family_of = collect_function_families(module)
+    module_dir = re.sub(r"\W", "_", module)
+    have = {M.parse_header(p)["start"] for p in (M.ROOT / "src").rglob("*")
+            if p.suffix in (".c", ".cpp") and M.parse_header(p)["module"] == module}
     reserved, attempted = reservations(M.ROOT, lane_dirs(), QUEUE)
     reserved |= starter_starts(module)
     return {"funcs": funcs, "family_of": family_of, "have": have, "reserved": reserved, "attempted": attempted,
@@ -388,6 +394,8 @@ def readability_batches(args) -> int:
     clone_note = re.compile(r"^/\* Clone of (src/\S+) \(lbpclone\.py tag [\w./-]+\)")
     reserved, attempted = reservations(M.ROOT, lane_dirs(), QUEUE)
     blocked = reserved | attempted | set(args.exclude)
+    held = starter_starts(args.module)
+    held_clone_sources: set[str] = set()
     rows, clones = [], defaultdict(int)
     for rel in R.publishable(M.ROOT):
         text = (M.ROOT / rel).read_text(encoding="utf-8", errors="replace")
@@ -395,13 +403,22 @@ def readability_batches(args) -> int:
         m = clone_note.match(lines[1]) if len(lines) > 1 else None
         if m:
             clones[m.group(1)] += 1
-            continue
+            if not held:
+                continue
         h = M.parse_header(M.ROOT / rel)
-        if h["module"] != args.module or h["start"] in blocked:
+        if h["module"] != args.module:
+            continue
+        if any(start in held for _name, start, _end in M.placed_functions(h)):
+            if m:
+                held_clone_sources.add(m.group(1))
+            continue
+        if m or h["start"] in blocked:
             continue
         s = R.score(text)
         if s["score"] and args.min_size <= h["end"] - h["start"] <= args.max_size:
             rows.append((s, rel, h))
+    # Refreshing a rewritten source would also replace its installed clones.
+    rows = [row for row in rows if row[1] not in held_clone_sources]
     # the published debt a rewrite removes: the source's own score and, through --refresh, its clones' copies
     rows.sort(key=lambda r: (-r[0]["score"] * (1 + clones.get(r[1], 0)), r[1]))
     made = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -16,7 +16,7 @@ Seeds must have one of --classes, one of --levers (default: the levers whose cal
 with retail), at most --max-left words left, and (with --profiles) one of those cc= profiles. A file whose calls or
 branches differ (lever body or structure) or whose only difference is a symbol (referent) is not a permuter problem,
 so it is left out unless it is named on the command line. Files src/ already covers, addresses reserved by an
-unfinished lane batch (lbpqueue.reservations), functions an open good first issue holds for new contributors
+unfinished lane batch (lbpqueue.reservations), functions and clone families held by a good first issue
 (data/starter-issues.json, even when named on the command line), and headers with extra= or helpers= are never
 seeded.
 
@@ -115,6 +115,8 @@ def main() -> int:
     reserved = reserved_addresses()
     import lbpqueue as Q
     starters = Q.load_starters(ROOT)   # outside reserved_addresses(): a broken list must stop the run, not be skipped
+    starter_modules = {module for module, _start in starters}
+    held_families: dict[str, set[int]] = {}
     seeds, skipped = [], {"reserved": 0, "starter": 0, "not_a_seed": 0}
     for row in rows:
         got = P.wip_seed(ROOT / row["wip"], covered, 1 << 30)
@@ -124,7 +126,17 @@ def main() -> int:
         if got[0][1] in reserved:
             skipped["reserved"] += 1
             continue
-        if got[0] in starters:
+        module, start = got[0]
+        is_starter = got[0] in starters
+        if not is_starter and module in starter_modules:
+            if module not in held_families:
+                _, family_of = Q.collect_function_families(module)
+                held_families[module] = {
+                    sibling for held_module, held_start in starters if held_module == module
+                    for sibling in family_of.get(held_start, [])
+                }
+            is_starter = start in held_families[module]
+        if is_starter:
             skipped["starter"] += 1
             continue
         seeds.append((row, got))
