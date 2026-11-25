@@ -9,6 +9,7 @@ it and both interpreters must agree; otherwise those tests are skipped.
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -417,13 +418,12 @@ def nakagawa_run_elf() -> Path | None:
     cxx = shutil.which("g++")
     if not src or not cxx or not (Path(src) / "src" / "ref" / "run_elf.cpp").is_file():
         return None
-    out = Path(tempfile.gettempdir()) / f"lbpcheck-run_elf-{os.getpid()}"
-    if not out.exists():
-        r = subprocess.run([cxx, "-std=c++17", "-O1", "-Isrc/ref", "-Isrc/rt", "-o", str(out), "src/ref/run_elf.cpp",
-                            "src/ref/interp.cpp", "-fno-exceptions"], cwd=src, capture_output=True, text=True)
-        if r.returncode != 0:
-            return None
-    return out
+    work = Path(tempfile.mkdtemp(prefix="lbpcheck-run_elf-"))
+    atexit.register(shutil.rmtree, work, True)
+    out = work / "run_elf"
+    r = subprocess.run([cxx, "-std=c++17", "-O1", "-Isrc/ref", "-Isrc/rt", "-o", str(out), "src/ref/run_elf.cpp",
+                        "src/ref/interp.cpp", "-fno-exceptions"], cwd=src, capture_output=True, text=True)
+    return out if r.returncode == 0 else None
 
 
 RUN_ELF = nakagawa_run_elf()
