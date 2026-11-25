@@ -65,8 +65,8 @@ KEYS: dict[str, Key] = {
                     "(not needed to build or verify)."),
     "gcc4_home": Key("wsl", "",
                      "WSL directory holding the open-source GCC 4.x PSP cross compilers this project builds from the "
-                     "GNU and pspdev sources (docs/TOOLCHAIN.md): psp-gcc-4.0.4x/ (the primary profile) and the "
-                     "comparison builds (psp-gcc-4.1.0s/, psp-gcc-4.3.2/, ...)."),
+                     "GNU and pspdev sources (toolchain/gcc4/README.md): psp-gcc-4.0.4c/ (the primary profile), "
+                     "psp-gcc-4.0.2x/, psp-gcc-4.0.2h/, psp-gcc-4.1.0s/ and the others the profiles name."),
     "decryptor": Key("host", "",
                      "Host path of the PSP game decryptor script that tools/lbpintake.py runs on your own disc image "
                      "(it decrypts the game's modules into the gitignored inputs/; never firmware)."),
@@ -183,7 +183,11 @@ def wsl_path(key: str) -> str:
 def _wsl_exists(path: str) -> bool:
     if '"' in path:
         return False
-    r = subprocess.run(["wsl.exe", "-e", "sh", "-c", f'test -e "{path}"'], capture_output=True)
+    try:
+        r = subprocess.run(["wsl.exe", "-e", "sh", "-c", f'test -e "{path}"'], capture_output=True)
+    except FileNotFoundError:
+        raise ConfigError("wsl.exe was not found, so the 'wsl' settings cannot be checked. The tools run on a Windows "
+                          "host and reach the compilers inside WSL (docs/GUIDE.md, Requirements).") from None
     return r.returncode == 0
 
 
