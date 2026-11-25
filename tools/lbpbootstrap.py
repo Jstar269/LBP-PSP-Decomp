@@ -71,6 +71,9 @@ def main() -> int:
         given[name] = path
     if not given:
         ap.error("give at least one --module NAME=PATH")
+    for name, path in given.items():
+        if not Path(path).is_file():
+            ap.error(f"--module {name}={path}: no such file (give the path of your decrypted module)")
 
     spec = json.loads(MODULES.read_text(encoding="utf-8"))
     known = {m["name"] for m in spec["modules"]}
@@ -78,10 +81,8 @@ def main() -> int:
     if unknown:
         ap.error(f"unknown module(s) {', '.join(unknown)}; data/modules.json lists {', '.join(sorted(known))}")
     out = Path(args.out).resolve()
-    (out / "inputs").mkdir(parents=True, exist_ok=True)
-    (out / "ledger").mkdir(parents=True, exist_ok=True)
 
-    modules, failed = [], False
+    modules, inputs, failed = [], {}, False
     for mod in spec["modules"]:
         path = given.get(mod["name"])
         if not path:
@@ -94,7 +95,7 @@ def main() -> int:
             failed = True
             continue
         name = f"{mod['name']}.decrypted"
-        (out / "inputs" / name).write_bytes(data)
+        inputs[name] = data
         functions = []
         ff = ROOT / mod["functions_file"]
         if ff.exists():
@@ -116,8 +117,12 @@ def main() -> int:
                         "input_sha256": mod["sha256"], "load_segments": mod["load_segments"], "functions": functions})
         print(f"{mod['name']}: OK ({len(functions)} functions)")
     if failed:
-        return 1
+        return 1   # nothing written: a half-made campaign directory would only fail later, in every tool
 
+    (out / "inputs").mkdir(parents=True, exist_ok=True)
+    (out / "ledger").mkdir(parents=True, exist_ok=True)
+    for name, data in inputs.items():
+        (out / "inputs" / name).write_bytes(data)
     ledger = {"schema": "lbp-decomp.bootstrap-campaign.v1", "title_id": spec["title_id"], "modules": modules}
     selection = {"schema": "lbp-decomp.bootstrap-selection.v1", "roots": {"inputs": str(out / "inputs")}}
     (out / "ledger" / "campaign.json").write_text(json.dumps(ledger, indent=1) + "\n", encoding="utf-8")

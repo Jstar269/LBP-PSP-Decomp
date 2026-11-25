@@ -9,9 +9,10 @@ Steps (each skipped when its output already exists; nothing is overwritten):
      executable files (EBOOT.BIN, BOOT.BIN, *.PRX, *.PBP) with sizes -> inputs/disc.json;
   3. run the PSP game decryptor (setting `decryptor`, or --decryptor) read-only (python -B, so it writes nothing next to itself) with its output root
      inputs/decrypt/ and its private report inputs/decrypt-report.json (no --include-pbp: the nested-PBP route stages
-     its DATA.PSP under the executable's name, see docs/HANDOFF.md);
+     its DATA.PSP under the executable's name, see docs/HANDOFF.md); a failing decryptor stops the intake (exit 1)
+     and what it wrote is moved to inputs/decrypt.failed/, so the next run tries again;
   4. describe every decrypted module (tools/lbpmodinfo.py) -> inputs/modinfo.json, and check each is a 32-bit
-     little-endian MIPS ELF/PRX.
+     little-endian MIPS ELF/PRX (exit 1 when there is none).
 
 Everything stays under the gitignored inputs/. The decryptor never decrypts firmware (owner rule).
 """
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import struct
 import subprocess
 import sys
@@ -111,6 +113,16 @@ def main() -> int:
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(args.decryptor.parent))
         (INPUTS / "decrypt.log").write_text(r.stdout + r.stderr, encoding="utf-8")
         print("\n".join(line for line in r.stdout.splitlines() if line.startswith(("ITEM", "PSP_DECRYPTOR"))))
+        if r.returncode != 0:
+            # a failed run's output is no result: set it aside, so that it is not described now and the next run
+            # does not skip this step as done
+            failed = INPUTS / "decrypt.failed"
+            if failed.exists():
+                shutil.rmtree(failed)
+            if stage.exists():
+                stage.rename(failed)
+            raise SystemExit(f"the decryptor failed (exit {r.returncode}); its output is in {INPUTS / 'decrypt.log'}"
+                             + (f", what it wrote in {failed}" if failed.exists() else ""))
     reports = []
     for path in sorted(p for p in stage.rglob("*") if p.is_file()):
         try:
@@ -124,6 +136,9 @@ def main() -> int:
               f"module={rep.get('module_info', {}).get('name')!r} comment={rep.get('comment')}")
         reports.append(rep)
     (INPUTS / "modinfo.json").write_text(json.dumps(reports, indent=1) + "\n", encoding="utf-8")
+    if not reports:
+        print(f"no decrypted module under {stage} is an ELF/PRX: nothing to describe", file=sys.stderr)
+        return 1
     return 0
 
 

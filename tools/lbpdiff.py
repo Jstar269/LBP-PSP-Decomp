@@ -2,6 +2,7 @@
 """Side-by-side disassembly of a source's linked bytes against the retail bytes (after lbpmatch.py)."""
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -21,9 +22,17 @@ def disasm(path: Path, vma: int) -> list[str]:
     return rows
 
 
-def main() -> int:
-    for arg in sys.argv[1:]:
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__ + "\n\n    python tools/lbpdiff.py <source> [<source> ...]\n\n"
+                                 "Run `python tools/lbpmatch.py <source>` first: lbpdiff reads that run's build/ "
+                                 "products. `**` marks a word that differs.",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("sources", nargs="+", type=Path, help="source files with an LBPMATCH header")
+    args = ap.parse_args(argv)
+    for arg in args.sources:
         src = Path(arg).resolve()
+        if not src.is_file():
+            ap.error(f"{arg}: no such file")
         h = M.parse_header(src)
         out = M.ROOT / "build" / h["module"] / M.build_key(src)
         cache: dict = {}
