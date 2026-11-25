@@ -34,6 +34,11 @@ NOTE = re.compile(r"^/\*\s*(Mechanical translation|Clone of).*?\*/\n", re.M)
 MAX_DATA_SHIFT = 0x10000
 # I-type opcodes that write rt: ALU immediates and integer loads (lui is handled separately)
 GPR_WRITE_RT = set(range(0x08, 0x0F)) | set(range(0x20, 0x27))
+# I-type opcodes whose rs is a GPR operand and whose immediate completes it (a lui's low half): ALU immediates, integer
+# and FPU loads/stores, cache, ll/sc and the VFPU loads/stores (lv.s lvl/lvr.q lv.q sv.s svl/svr.q sv.q). In the other
+# opcodes from 8 up the rs field is no base register (COP1/COP2/VFPU sub-ops and formats, SPECIAL2/SPECIAL3) or the
+# immediate is no low half (branch-likely offsets).
+LO_HALF_OPS = set(range(0x08, 0x0F)) | set(range(0x20, 0x30)) | {0x30, 0x31, 0x32, 0x35, 0x36, 0x38, 0x39, 0x3A, 0x3D, 0x3E}
 
 
 def words(data: bytes) -> list[int]:
@@ -54,7 +59,7 @@ def analyse(ws: list[int]) -> tuple[tuple[int, ...], list[tuple[str, int, int]]]
             hi[rt] = (w & 0xFFFF) << 16
             refs.append(("hi", i, (w & 0xFFFF) << 16))
             continue
-        elif op >= 8 and rs in hi:
+        elif op in LO_HALF_OPS and rs in hi:
             sig.append(w & 0xFFFF0000)
             imm = w & 0xFFFF
             if op not in (0x0C, 0x0D, 0x0E) and imm & 0x8000:  # andi/ori/xori zero-extend
@@ -63,10 +68,12 @@ def analyse(ws: list[int]) -> tuple[tuple[int, ...], list[tuple[str, int, int]]]
         else:
             sig.append(w)
         # a register written here no longer holds a lui high half
-        if op in (0x00, 0x1C, 0x1F):
+        if op in (0x00, 0x1C) or (op == 0x1F and (w & 0x3F) == 0x20):  # seb/seh/wsbh/bitrev write rd
             hi.pop((w >> 11) & 31, None)
-        elif op in GPR_WRITE_RT or (op == 0x11 and rs == 0):
+        elif op in GPR_WRITE_RT or op in (0x1F, 0x30, 0x38) or (op == 0x11 and rs in (0, 2)):  # ext/ins, ll/sc, mfc1/cfc1
             hi.pop(rt, None)
+        elif op == 3:                                   # jal links into ra
+            hi.pop(31, None)
     return tuple(sig), refs
 
 
@@ -74,12 +81,22 @@ def mapping(e_refs, t_refs) -> tuple[dict[int, int], dict[int, int], dict[int, i
     calls, data, his = {}, {}, {}
     if len(e_refs) != len(t_refs):
         return None
+    bad_hi = set()
     for (ek, ei, ev), (tk, ti, tv) in zip(e_refs, t_refs):
         if ek != tk or ei != ti:
             return None
-        table = calls if ek == "call" else his if ek == "hi" else data
+        if ek == "hi":
+            # two exemplar addresses in one 64 KiB page can land in two target pages; the hi table only feeds
+            # literal rewriting, so an ambiguous high half is dropped (its literal is left alone), never fatal
+            # (as hst-decomp's hstclone.mapping)
+            if his.setdefault(ev, tv) != tv:
+                bad_hi.add(ev)
+            continue
+        table = calls if ek == "call" else data
         if table.setdefault(ev, tv) != tv:
             return None
+    for key in bad_hi:
+        his.pop(key, None)
     return calls, data, his
 
 
@@ -171,13 +188,29 @@ def retarget(text: str, e_start: int, t_start: int, t_end: int, calls: dict[int,
     head, rest = body.split("\n", 1)
     head = re.sub(r"start=0x[0-9a-fA-F]+", f"start=0x{t_start:08x}", head)
     head = re.sub(r"end=0x[0-9a-fA-F]+", f"end=0x{t_end:08x}", head)
-    # a jump table's base is built with lui/addiu, so the placed .rodata moves with the data mapping
-    rodata = re.search(r"rodata=0x([0-9a-fA-F]+)", head)
-    if rodata:
+    # helpers=NAME@0xSTART-0xEND: a local helper compiled into the same object. The exemplar calls it, so the
+    # call mapping gives the clone's helper; its size is the exemplar helper's (lbpmatch then checks its bytes).
+    unmapped = []
+
+    def helper(m: re.Match) -> str:
+        e_lo, e_hi = int(m.group(2), 16), int(m.group(3), 16)
+        t_lo = calls.get(e_lo)
+        if t_lo is None:
+            unmapped.append(e_lo)
+            return m.group(0)
+        return f"{m.group(1)}@0x{t_lo:08x}-0x{t_lo + (e_hi - e_lo):08x}"
+    head = re.sub(r"(\w+)@0x([0-9a-fA-F]{8})-0x([0-9a-fA-F]{8})", helper, head)
+    if unmapped:
+        return None  # a helper the exemplar never calls directly cannot be placed in the clone
+    # a jump table's base is built with lui/addiu, so the placed .rodata moves with the data mapping; the other
+    # placed data sections (data=, sdata=, bss=, sbss=) move with it as well (as hst-decomp's hstclone.retarget)
+    def placed(m: re.Match) -> str:
         try:
-            head = head.replace(rodata.group(0), f"rodata=0x{map_value('DAT', int(rodata.group(1), 16), e_start, t_start, calls, data):08x}")
+            new = map_value("DAT", int(m.group(2), 16), e_start, t_start, calls, data)
         except KeyError:
-            pass  # no data reference reveals the clone's table: keep the exemplar's placement
+            return m.group(0)  # no data reference reveals the clone's placement: keep the exemplar's (lbpmatch decides)
+        return m.group(0) if new is None else f"{m.group(1)}=0x{new:08x}"
+    head = re.sub(r"\b(rodata|data|sdata|bss|sbss)=0x([0-9a-fA-F]+)", placed, head)
     return head + "\n" + rest
 
 
