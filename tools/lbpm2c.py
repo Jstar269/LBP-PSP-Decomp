@@ -62,7 +62,8 @@ def inventory(module: str) -> dict[int, int]:
 
 def covered(module: str) -> set[int]:
     out = set()
-    for line in (M.ROOT / "data" / "accepted-ledger.jsonl").read_text(encoding="utf-8").splitlines():
+    ledger = M.ROOT / "data" / "accepted-ledger.jsonl"      # maintainers only: the public tree does not carry it
+    for line in (ledger.read_text(encoding="utf-8").splitlines() if ledger.exists() else []):
         r = json.loads(line)
         if r.get("module") == module:
             s = r["start"]
@@ -161,7 +162,7 @@ def to_m2c(start: int, end: int, ins: list[tuple[int, str, list[str]]]) -> str:
     k = 0
     while k < len(ins):
         a, mn, _o = ins[k]
-        if a in targets and a != start:
+        if a in targets:                    # the first instruction too: a loop may start there
             lines.append(f".L{a:08x}:")
         oo = ops[k]
         if mn in BRANCHES and oo and oo[-1].startswith("0x"):

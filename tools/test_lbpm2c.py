@@ -48,6 +48,39 @@ class Conversion(unittest.TestCase):
         self.assertIn(".L0000010c:\n/* 0000010C */ jr $ra", s)
 
 
+    def test_branch_to_the_first_instruction_has_a_label(self):
+        # a loop that starts at the function's first instruction (a strlen-like leaf): the branch names .L<start>,
+        # so that label must be defined, or the m2c input refers to a label that does not exist
+        ins = [(0x100, "lb", ["$v0", "0($a0)"]), (0x104, "bnez", ["$v0", "0x100"]), (0x108, "addiu", ["$a0", "$a0", "1"]),
+               (0x10c, "jr", ["$ra"]), (0x110, "nop", [])]
+        s = X.to_m2c(0x100, 0x114, ins)
+        self.assertIn("bnez $v0, .L00000100", s)
+        import re
+        used = set(re.findall(r"(\.L[0-9a-f]{8})\b(?!:)", s))
+        defined = set(re.findall(r"^(\.L[0-9a-f]{8}):", s, re.M))
+        self.assertEqual(used - defined, set())
+        self.assertIn("glabel FUN_00000100\n.L00000100:\n/* 00000100 */ lb $v0, 0($a0)", s)
+
+
+class Covered(unittest.TestCase):
+    def test_public_tree_without_the_accepted_ledger(self):
+        # the public tree has no data/accepted-ledger.jsonl (lbppublish.py keeps it private): the sources in src/
+        # are then what covers a function, and the selection must not crash before it starts
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "src" / "eboot").mkdir(parents=True)
+            (root / "src" / "eboot" / "f.c").write_text(
+                "/* LBPMATCH module=EBOOT.BIN start=0x08804000 end=0x08804008 symbol=FUN_08804000 */\n", encoding="utf-8")
+            with mock.patch.object(X.M, "ROOT", root):
+                self.assertEqual(X.covered("EBOOT.BIN"), {0x08804000})
+                (root / "data" / "accepted-ledger.jsonl").write_text(
+                    '{"schema": 1}\n{"module": "EBOOT.BIN", "start": "0x08804010"}\n', encoding="utf-8")
+                self.assertEqual(X.covered("EBOOT.BIN"), {0x08804000, 0x08804010})
+
+
 class Publishable(unittest.TestCase):
     def test_sdk_region_is_left_out_and_game_kept(self):
         pub = X.publishable_filter("EBOOT.BIN")
