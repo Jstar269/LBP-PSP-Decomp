@@ -225,6 +225,42 @@ class StarterTests(unittest.TestCase):
         self.write([])
         self.assertEqual(seeds(module_reads=0), list(addresses))
 
+    def test_clone_propagation_never_targets_a_starter(self) -> None:
+        import lbpclone as C
+
+        exemplar, starter, other = 0x1000, 0x1020, 0x1040
+        (self.root / "src" / "eboot").mkdir(parents=True)
+        (self.root / "src" / "eboot" / "a_00001000.c").write_text(self.HEADER.format(exemplar, exemplar + 32),
+                                                                   encoding="utf-8")
+        ledger = self.root / "ledger"
+        ledger.mkdir()
+        (ledger / "campaign.json").write_text(json.dumps({"modules": [{"name": "EBOOT.BIN", "functions": [
+            {"start": s, "end": s + 32, "boundary_status": "auto"} for s in (exemplar, starter, other)]}]}),
+            encoding="utf-8")
+        data = b"\x01\x00\x02\x24" * 24       # three functions of the same synthetic shape
+
+        def targets() -> list[int]:
+            seen: list[int] = []
+
+            def retarget(_text, _e_start, t_start, *_rest):
+                seen.append(t_start)
+                return None
+
+            args = ["lbpclone.py", "--tag", "synthetic", "--module", "EBOOT.BIN", "--dry-run"]
+            with patch.object(sys, "argv", args), patch.object(C.M, "ROOT", self.root), \
+                    patch.dict(C.M.__dict__, {"CAMPAIGN": self.root}), \
+                    patch.object(C.M, "module_bytes", return_value=(data, {"start": exemplar, "file_offset": 0})), \
+                    patch.object(C.M, "load_symbols", return_value={}), patch.object(C, "retarget", side_effect=retarget), \
+                    patch.object(Q, "starter_starts", partial(Q.starter_starts, root=self.root)), \
+                    redirect_stdout(io.StringIO()):
+                self.assertEqual(C.main(), 0)
+            return sorted(seen)
+
+        self.write([{"module": "EBOOT.BIN", "start": f"0x{starter:08x}", "issue": 2}])
+        self.assertEqual(targets(), [other])
+        self.write([])
+        self.assertEqual(targets(), [starter, other])
+
     def test_readability_keeps_held_placements_and_clone_sources_out_of_batches(self) -> None:
         import lbpreadable
 

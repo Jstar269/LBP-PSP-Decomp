@@ -5,7 +5,8 @@
 
 Seeds: every .c/.cpp under the tree's wip/ (recursive) and the top-level wip/ of every lane under ext_root (a
 directory with LANE.json), read with lbplane.wip_text, for functions src/ does not cover; a seed whose header has
-`extra=` or `helpers=`, an unknown cc= or a header that is not one closed first line is skipped. Seeds are deduped by
+`extra=` or `helpers=`, an unknown cc= or a header that is not one closed first line is skipped, and so is a starter
+function that an open good first issue holds (data/starter-issues.json) or a member of its clone family. Seeds are deduped by
 the SHA-1 of the text with the header's cc= removed and the trailing `//` lines dropped (the first one found wins:
 the tree's wip/ before the lanes, each in path order).
 
@@ -228,9 +229,23 @@ def read_wip_seed(path: Path) -> str:
     return headers[0].rstrip("\n") + "\n" + body
 
 
+def held_functions(root: Path) -> set[tuple[str, int]]:
+    """(module, start) of every starter function (data/starter-issues.json) and of each member of its clone family:
+    held for new contributors, so never swept or written to a sweep lane (lbpnearperm.py holds the same set). A
+    malformed list stops the sweep: an empty set would hand the starter functions to the lane."""
+    import lbpqueue as Q
+    starters = Q.load_starters(root)
+    held = set(starters)
+    for module in sorted({m for m, _s in starters}):
+        _funcs, family_of = Q.collect_function_families(module)
+        held |= {(module, s) for m, start in starters if m == module for s in family_of.get(start, [])}
+    return held
+
+
 def discover_seeds(tree: Path, lanes: list[Path], covered: set[tuple[str, int]], primary: str, *,
-                   read_seed: Callable[[Path], str] = read_wip_seed) -> tuple[list[dict], Counter]:
-    """The deduped seeds and a count of the files skipped by reason."""
+                   read_seed: Callable[[Path], str] = read_wip_seed,
+                   held: set[tuple[str, int]] | frozenset = frozenset()) -> tuple[list[dict], Counter]:
+    """The deduped seeds and a count of the files skipped by reason. `held` (held_functions) is never seeded."""
     seeds: list[dict] = []
     seen: set[str] = set()
     skipped: Counter = Counter()
@@ -242,6 +257,9 @@ def discover_seeds(tree: Path, lanes: list[Path], covered: set[tuple[str, int]],
             continue
         if (h["module"], h["start"]) in covered:
             skipped["covered"] += 1
+            continue
+        if (h["module"], h["start"]) in held:
+            skipped["starter"] += 1
             continue
         if "extra" in h or "helpers" in h:
             skipped["extra_or_helpers"] += 1
@@ -522,7 +540,8 @@ def main() -> int:
     locked, primary, digest = lock_profiles(json.loads(MANIFEST.read_text(encoding="utf-8")))
     gcc_locked, unlocked = sweep_profiles(locked, args.unlocked)
     lanes = sorted(p for p in ext.glob("*") if (p / "LANE.json").exists()) if ext is not None and ext.exists() else []
-    seeds, skipped = discover_seeds(ROOT, lanes, L.covered(ROOT), primary, read_seed=L.wip_text)
+    seeds, skipped = discover_seeds(ROOT, lanes, L.covered(ROOT), primary, read_seed=L.wip_text,
+                                    held=held_functions(ROOT))
     cache_path = SWEEP / "cache.json"
     cache = load_cache(cache_path)
     results, stats = sweep(seeds, gcc_locked, unlocked, digest, cache, args.parallel, cache_path=cache_path)

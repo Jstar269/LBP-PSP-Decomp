@@ -3,12 +3,16 @@
 and the lane it writes. No compiler runs: the matcher is replaced."""
 from __future__ import annotations
 
+import io
 import json
 import sys
 import tempfile
 import unittest
 from collections import Counter
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbpsweep as S  # noqa: E402
@@ -265,6 +269,64 @@ class LaneTests(unittest.TestCase):
                              [f"0x00000100 EXACT src/eboot/{a['name']}", f"0x00000200 EXACT src/eboot/{b['name']}"])
             with self.assertRaises(SystemExit):
                 S.install_lane("lbp21s", [], lane, main, [], "", "")
+
+
+class StarterTests(unittest.TestCase):
+    """A function that an open good first issue holds, and every clone of it, stays out of the sweep."""
+
+    STARTER, SIBLING, OTHER = 0x08800000, 0x08800100, 0x08800200
+
+    def tree(self, root: Path, held: bool = True) -> None:
+        write(root / "manifest.json", "{}")
+        for start in (self.STARTER, self.SIBLING, self.OTHER):
+            write(root / "wip" / f"f_{start:08x}.c", src(start, body=f"int f_{start:x}(void) {{ return 1; }}"))
+        entries = [{"module": "EBOOT.BIN", "start": f"0x{self.STARTER:08x}", "issue": 2}] if held else []
+        write(root / "data" / "starter-issues.json",
+              json.dumps({"schema": "lbp-decomp.starter-issues.v1", "entries": entries}))
+
+    def families(self, module: str):
+        self.assertEqual(module, "EBOOT.BIN")
+        return {}, {self.STARTER: [self.STARTER, self.SIBLING], self.SIBLING: [self.STARTER, self.SIBLING]}
+
+    def test_held_functions_are_the_starters_and_their_clone_families(self) -> None:
+        import lbpqueue as Q
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.tree(root)
+            with patch.object(Q, "collect_function_families", side_effect=self.families):
+                held = S.held_functions(root)
+            self.assertEqual(held, {("EBOOT.BIN", self.STARTER), ("EBOOT.BIN", self.SIBLING)})
+            seeds, skipped = S.discover_seeds(root, [], set(), PRIMARY, held=held)
+            self.assertEqual([s["start"] for s in seeds], [self.OTHER])
+            self.assertEqual(skipped, Counter(starter=2))
+
+    def test_the_sweep_and_its_lane_never_take_a_starter_or_its_clone(self) -> None:
+        import lbpqueue as Q
+
+        def swept(held: bool) -> list[int]:
+            with tempfile.TemporaryDirectory() as d:
+                root = Path(d)
+                self.tree(root, held)
+                seen: list[int] = []
+
+                def fake_sweep(seeds, *_args, **_kwargs):
+                    seen.extend(s["start"] for s in seeds)
+                    return {}, Counter()
+
+                lane = SimpleNamespace(CFG=SimpleNamespace(get=lambda _key: None), ext_root=lambda: None,
+                                       covered=lambda _root: set(), wip_text=S.read_wip_seed, git_head=lambda _r: "")
+                with patch.object(sys, "argv", ["lbpsweep.py"]), patch.dict(sys.modules, {"lbplane": lane}), \
+                        patch.object(S, "ROOT", root), patch.object(S, "SWEEP", root / "try" / "sweep"), \
+                        patch.object(S, "sweep", side_effect=fake_sweep), \
+                        patch.object(S, "MANIFEST", root / "manifest.json"), \
+                        patch.object(S, "lock_profiles", return_value=(LOCKED, PRIMARY, "digest")), \
+                        patch.object(Q, "collect_function_families", side_effect=self.families), \
+                        redirect_stdout(io.StringIO()):
+                    self.assertEqual(S.main(), 0)
+                return sorted(seen)
+
+        self.assertEqual(swept(held=True), [self.OTHER])
+        self.assertEqual(swept(held=False), [self.STARTER, self.SIBLING, self.OTHER])
 
 
 if __name__ == "__main__":
