@@ -56,9 +56,15 @@ BINARY_SUFFIXES = {".o", ".obj", ".elf", ".bin", ".prx", ".pbp", ".iso", ".cso",
                    ".7z", ".gz", ".tar", ".gzf", ".rep", ".img", ".dat", ".sfo", ".at3", ".pmf"}
 NEVER = (re.compile(r"^(build|try|keys|inputs|campaign|analysis)/"), re.compile(r"^ghidra/(projects|out|cache|settings)/"),
          re.compile(r"(^|/)[^/]*keyfile[^/]*$", re.I), re.compile(rf"^{re.escape(CONFIG)}$"))
-PRIVATE = re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+(?!<)\w|/home/(?!<|user\b)\w|/mnt/[a-z]/Users/(?!<)\w|"
-                     r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\bghp_[A-Za-z0-9]{20}|\bgithub_pat_\w{20}|"
-                     r"\bsk-[A-Za-z0-9]{20}|\bAKIA[0-9A-Z]{16}\b")
+# Home directories in any letter case (Windows paths are case-insensitive), with the macOS /Users/<name> and Git for
+# Windows' /<drive>/Users/<name> at the start of an absolute path; tokens in their current forms (GitHub ghp_/gho_/ghu_/
+# ghs_/ghr_ and github_pat_, OpenAI sk- and sk-proj-/sk-svcacct-/sk-admin-, AWS AKIA and ASIA key ids); PEM and PGP
+# private key blocks.
+PRIVATE = re.compile(r"(?i:[a-z]:[\\/]+Users[\\/]+(?!<)\w|/home/(?!<|user\b)\w|/mnt/[a-z]/Users/(?!<)\w|"
+                     r"(?<![\w.~:-])/(?:[a-z]/)?Users/(?!<|(?:Shared|Default|Public|test|user|you)\b)\w)|"
+                     r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----|\bgh[pousr]_[A-Za-z0-9]{20}|\bgithub_pat_\w{20}|"
+                     r"\bsk-(?:[A-Za-z0-9]{20}|(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20})|"
+                     r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")
 DUMP_LINE = re.compile(r"^\W*(0x)?[0-9a-fA-F]{6,8}:?\s+(0x)?[0-9a-fA-F]{8}\s+[a-z][a-z0-9.]{1,9}\b")
 DUMP_LIMIT = 16
 HEADER = re.compile(rf"^/\* {MATCH} (?=.*\bmodule=\S)(?=.*\bstart=0x[0-9a-fA-F]+)(?=.*\bend=0x[0-9a-fA-F]+)"

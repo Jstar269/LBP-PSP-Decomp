@@ -2,7 +2,10 @@
 """Tests for the origin classes (lbporigin.py) and the public-tree builder (lbppublish.py). No WSL, no retail bytes."""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -259,6 +262,64 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(len(lbppublic.check_tree(["src/eboot/a.c", "src/eboot/b.c"],
                                                   {"src/eboot/a.c": "game", "src/eboot/b.c": "sony-sdk"})), 2)
         self.assertEqual(len(lbppublic.check_tree(["wip/c.cpp"], {})), 1)
+
+    @unittest.skipUnless(hasattr(os, "symlink") and os.name != "nt", "needs POSIX symbolic links")
+    def test_a_symbolic_link_is_never_published(self) -> None:
+        # a copy follows the link: a tracked link to a private or disc-derived file (or to anything outside the tree)
+        # would publish its target's bytes under the link's own name
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "docs").mkdir()
+            (root / "data" / "accepted-ledger.jsonl").write_text("{}\n", encoding="utf-8")
+            (root / "docs" / "LANE-BRIEF.md").write_text("private\n", encoding="utf-8")
+            (root / "docs" / "notes.md").write_text("public\n", encoding="utf-8")
+            os.symlink("../data/accepted-ledger.jsonl", root / "docs" / "ledger.jsonl")
+            os.symlink("LANE-BRIEF.md", root / "docs" / "brief.md")
+            tracked = ["data/accepted-ledger.jsonl", "docs/LANE-BRIEF.md", "docs/notes.md", "docs/ledger.jsonl",
+                       "docs/brief.md"]
+            keep, _excluded = P.plan(tracked, set(), {}, root=root)
+            self.assertEqual(keep, ["docs/notes.md"])
+    def test_audit_refuses_any_home_directory_and_token(self) -> None:
+        # as hst-decomp's publish scan: any user's home directory and bare tokens, not only the maintainers' own paths
+        leaks = ("built in C:" + "\\Users\\someone\\lbp", "see /home/" + "someone/lbp", "see /mnt/c/" + "users/someone",
+                 "see /" + "Users/someone/lbp", "push with gh" + "p_" + "a1" * 18, "gh" + "s_" + "b2" * 18,
+                 "github" + "_pat_" + "c3" * 20, "AK" + "IA" + "Q7" * 8, "sk-" + "proj-" + "Ab1_-x" * 8,
+                 "-----BEGIN PGP " + "PRIVATE KEY BLOCK-----")
+        fine = ("C:" + "\\Users\\<you>\\lbp", "/home/<user>/lbp", "/home/user/lbp", "/" + "Users/Shared/lbp",
+                "https://example.invalid/" + "users/someone")
+        for text, want in [(t, 1) for t in leaks] + [(t, 0) for t in fine]:
+            with self.subTest(text=text[:20]), tempfile.TemporaryDirectory() as tmp:
+                tree = Path(tmp)
+                (tree / "ORIGINS.json").write_text("{}\n", encoding="utf-8")
+                (tree / "docs").mkdir()
+                (tree / "docs" / "notes.md").write_text(f"notes\n{text}\n", encoding="utf-8")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(P.audit(tree), want)
+
+    def test_public_check_refuses_maintainer_only_files(self) -> None:
+        # `lbppublic.py sync` stages the whole public work tree (`git add -A`), untracked files included, and `check`
+        # is the gate before its commit and the pre-push check: as hst-decomp's, it refuses files the policy keeps out
+        import lbppublic
+        files = ["README.md", "AGENTS.md", "data/accepted-ledger.jsonl", "data/target-manifest.json",
+                 "docs/LANE-BRIEF.md", "tools/lbplane.py", "docs/public/README.md"]
+        self.assertEqual(sorted(b.split(":")[0] for b in lbppublic.check_tree(files, {})),
+                         ["data/accepted-ledger.jsonl", "data/target-manifest.json", "docs/LANE-BRIEF.md",
+                          "docs/public/README.md", "tools/lbplane.py"])
+
+    def test_public_check_scans_the_commit_message(self) -> None:
+        import subprocess
+        import lbppublic
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "ORIGINS.json").write_text("{}\n", encoding="utf-8")
+            run = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True)  # noqa: E731
+            run("init", "-q")
+            run("add", "-A")
+            run("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m",
+                "Publish\n\napi_key = " + "Zx9" * 4)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(lbppublic.check(repo, "HEAD"), 1)
 
     def test_the_tool_runs_git_ls_files_only(self) -> None:
         with self.assertRaises(AssertionError):

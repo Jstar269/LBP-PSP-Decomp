@@ -13,8 +13,11 @@ files are left alone), runs `check`, and commits there when anything changed. It
 deliberate step of the owner's publishing procedure (AGENTS.md).
 
 `check` refuses a tree whose sources (src/, wip/) are not all listed in its own ORIGINS.json with a publishable class,
-or whose ORIGINS.json lists an excluded class; with --commit it checks that commit of the public repository. A
-pre-push hook in the public repository can run it on every pushed commit.
+or whose ORIGINS.json lists an excluded class, a tree that holds a file the policy keeps out (lbppublish.py
+PRIVATE_PATHS and DISC_DERIVED, except the public README.md and AGENTS.md: `sync` stages the whole work tree, untracked
+files included), and a commit message with a private path or key-like text (lbppublish.py PRIVATE_TEXT,
+PERSONAL_TEXT, KEY_TEXT), as hst-decomp's tools/hstpublic.py does; with --commit it checks that commit of the public repository. A pre-push hook
+in the public repository can run it on every pushed commit.
 """
 from __future__ import annotations
 
@@ -52,7 +55,9 @@ def mirror(src: Path, dst: Path) -> None:
 
 
 def check_tree(files: list[str], origins: dict) -> list[str]:
-    bad = []
+    bad = [f"{f}: excluded by the policy (lbppublish.py PRIVATE_PATHS or DISC_DERIVED)" for f in files
+           if (lbppublish.matches(f, lbppublish.PRIVATE_PATHS) or lbppublish.matches(f, lbppublish.DISC_DERIVED))
+           and f not in lbppublish.PUBLIC_FILES.values()]
     for f in files:
         if f.split("/")[0] in ("src", "wip") and f.endswith((".c", ".cpp")):
             cls = origins.get(f)
@@ -62,14 +67,25 @@ def check_tree(files: list[str], origins: dict) -> list[str]:
     return bad
 
 
-def check(repo: Path, commit: str | None) -> int:
+def message_problems(message: str) -> list[str]:
+    """The lines of a commit message with a private path or key-like text (as lbppublish.py --audit judges a line)."""
+    bad = []
+    for n, line in enumerate(message.splitlines(), 1):
+        key = lbppublish.KEY_TEXT.search(line) and not lbppublish.DIGEST_CONTEXT.search(line)
+        if lbppublish.PRIVATE_TEXT.search(line) or lbppublish.PERSONAL_TEXT.search(line) or key:
+            bad.append(f"commit message line {n}: private path or key-like text")
+    return bad
+
+
+def check(repo: Path, commit: str | None, message: str | None = None) -> int:
     if commit is None:
         files = git(repo, "ls-files").splitlines()
         origins = json.loads((repo / "ORIGINS.json").read_text(encoding="utf-8"))
     else:
         files = git(repo, "ls-tree", "-r", "--name-only", commit).splitlines()
         origins = json.loads(git(repo, "show", f"{commit}:ORIGINS.json"))
-    bad = check_tree(files, origins)
+        message = git(repo, "log", "-1", "--format=%B", commit)
+    bad = check_tree(files, origins) + message_problems(message or "")
     for b in bad[:20]:
         print(f"REFUSED {b}", file=sys.stderr)
     if bad:
@@ -95,7 +111,7 @@ def sync(repo: Path, message: str) -> int:
     if not git(repo, "status", "--porcelain").strip():
         print("public repository already up to date")
         return 0
-    if check(repo, None):
+    if check(repo, None, message):
         return 1
     subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=repo, input=message, text=True, check=True)
     print(git(repo, "log", "-1", "--oneline").strip())

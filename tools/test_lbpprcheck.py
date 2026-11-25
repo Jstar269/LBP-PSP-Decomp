@@ -108,5 +108,30 @@ class PrCheckTests(unittest.TestCase):
         self.assertEqual(lbplint.provenance_note(HEADER + "int x;\n" + NOTE), (None, ""))
 
 
+
+class PrivatePatternTests(unittest.TestCase):
+    """Personal paths and secrets the `private` check must refuse (each fixture is assembled at run time, so this file
+    holds none of them)."""
+    REFUSED = ("see c:" + "\\users\\someone\\game",              # Windows paths are case-insensitive
+               "see /mnt/c/" + "users/someone/game", "see C:/" + "USERS/someone",
+               "see /" + "Users/alice/lbp-psp-decomp/try",       # macOS home directory
+               "cd /c/" + "Users/alice/lbp-psp-decomp",          # Git for Windows (MSYS) form
+               "gh" + "o_" + "a1" * 18, "gh" + "s_" + "b2" * 18, "gh" + "u_" + "c3" * 18, "gh" + "r_" + "d4" * 18,
+               "sk-" + "proj-" + "Ab1_-x" * 8, "sk-" + "svcacct-" + "Zz9-_y" * 8, "AS" + "IA" + "Q7" * 8,
+               "-----BEGIN PGP " + "PRIVATE KEY BLOCK-----")
+    ALLOWED = ("/" + "Users/Shared/lbp", "/" + "Users/<you>/lbp", "src/" + "Users/list.c",
+               "https://example.invalid/" + "users/alice", "C:" + "\\Users\\<you>\\x", "/home/<user>/x",
+               "task-list-of-things-to-do-here", "the disk-based sk-learn style", "ASIAN_FONT_TABLE")
+
+    def test_refused(self) -> None:
+        for text in self.REFUSED:
+            with self.subTest(text=text[:16]):
+                self.assertIsNotNone(P.PRIVATE.search(text))
+
+    def test_allowed(self) -> None:
+        for text in self.ALLOWED:
+            with self.subTest(text=text):
+                self.assertIsNone(P.PRIVATE.search(text))
+
 if __name__ == "__main__":
     unittest.main()
