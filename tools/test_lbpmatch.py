@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lbpmatch as M  # noqa: E402
@@ -219,7 +220,9 @@ class CxxVtable(unittest.TestCase):
             self.assertFalse(M.is_cxx_vtable_section(".gnu.linkonce.r._ZTV3Obj", h), h)
 
     def test_profile_gcc404xsg_is_gcc404xs_with_assembler_g(self) -> None:
-        prof = M.gcc_profiles()
+        with patch.object(M, "_gcc_profiles", None), patch.object(M, "gcc_home", return_value="/fixture/gcc"), \
+             patch.object(M, "gcc4_home", return_value="/fixture/gcc4"):
+            prof = M.gcc_profiles()
         for o in ("O0", "O1", "O2", "O3", "Os"):
             self.assertEqual(prof[f"gcc404xsg-{o}"]["flags"], prof[f"gcc404xs-{o}"]["flags"] + " -Wa,-g")
             self.assertEqual(prof[f"gcc404xsg-{o}"]["driver"], prof[f"gcc404xs-{o}"]["driver"])
