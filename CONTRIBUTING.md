@@ -20,7 +20,7 @@ change, by a person or an agent.
   code. `tools/lbpbootstrap.py` checks the decrypted file against the SHA-256 in `data/modules.json`.
 - **Windows with WSL** (Ubuntu 24.04, with `libc6-i386`) and **Python 3.12 or newer** with no third-party packages.
 - **The compilers, which you build or install yourself** (none is in this repository):
-  - the open-source GCC 4.x PSP compilers (`psp-gcc-4.0.4x`, the primary, and `4.0.2x`, `4.0.2h`, `4.1.0s`), built
+  - the open-source GCC 4.x PSP compilers (`psp-gcc-4.0.4c`, the primary, and `4.0.2x`, `4.0.2h`, `4.1.0s`), built
     from the GNU and pspdev sources by [`toolchain/gcc4/`](toolchain/gcc4/README.md), which says exactly what to
     install, downloads and verifies the sources, and checks the result against the recorded builds;
   - the decomp.me `psp-gcc-1.3.1` kit (its Sony binutils 2.14 assembler is what the GCC 4 builds assemble with) and
@@ -225,6 +225,9 @@ in `symbols/`, sources without a valid header or note, and anything the fake-mat
 files, `python tools/lbpreuse.py check` confirms that every tracked file is covered by the licence map (`REUSE.toml`);
 new library sources need `python tools/lbpreuse.py generate --write` first. `ORIGINS.json` is a snapshot made by
 `python tools/lbporigin.py`; refresh it before a release (`lbppublish.py` classifies afresh).
+
+CI also runs, and needs no game for, `python tools/lbpgate.py --all --wip`, `python tools/lbpreuse.py check` and the
+unit tests, `python -m unittest discover -s tools -p "test_*.py"`; run them before you push.
 
 For a change that touches many sources, `python tools/lbpmatch.py --all` is the full regression (it shares `build/`
 with any concurrent run, so run one at a time).

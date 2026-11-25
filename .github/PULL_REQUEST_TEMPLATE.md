@@ -11,6 +11,7 @@
 
 - [ ] `python tools/lbpmatch.py <every file added or changed>` reports EXACT for each one
 - [ ] `python tools/lbpprcheck.py --base origin/main` reports OK
+- [ ] `python tools/lbpreuse.py check` and `python -m unittest discover -s tools -p "test_*.py"` pass (CI runs both)
 - [ ] Each new source has a true line-2 provenance note, and no other source already covers the function
 - [ ] New compiler findings, if any, are added to `docs/TOOLCHAIN.md` ("Findings log")
 - [ ] No game data, decrypted modules, disassembly, keys or compiler binaries are included, and nothing from the game

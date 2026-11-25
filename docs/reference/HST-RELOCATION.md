@@ -3,7 +3,7 @@
 A PSP executable (`EBOOT.BIN`, the Sharing Version's `hstp_trans_main.prx`) is a relocatable module: the firmware loads
 it at an address it chooses and then patches every word that holds an address. The list of those words is the
 relocation table. This page describes the format, the order the original link left the entries in, and how
-`tools/hstbuild.py` regenerates the tables and uses them for the shifted build (gate 5 of [COMPLETION.md](COMPLETION.md)).
+`tools/hstbuild.py` regenerates the tables and uses them for the shifted build (gate 5 of hst-decomp's [COMPLETION.md](https://github.com/Jstar269/hst-decomp/blob/main/docs/COMPLETION.md)).
 The code is `tools/hstreloc.py`; its tests are in `tools/test_hstbuild.py`.
 
 ## Format A (section type and program header type `0x700000A0`)
