@@ -1,0 +1,110 @@
+{
+ "schema": "lbp-decomp.milestone-record.v1",
+ "generated": "2026-11-22",
+ "milestones": [
+  {
+   "id": "inventory",
+   "title": "Every byte classified",
+   "progress": null,
+   "detail": "not measured here: needs the campaign ledger (campaign_root)",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "game-code",
+   "title": "Game code matched",
+   "progress": 21.672,
+   "detail": "620,052 of 2,861,108 code bytes of the public scope",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "all-code",
+   "title": "All code matched",
+   "progress": 21.672,
+   "detail": "620,052 of 2,861,108 code bytes of the public scope (pspnet_ap_dialog_dummy.prx: Sony code kept out of this repository, not counted)",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "psp-rebuild",
+   "title": "PSP rebuild",
+   "progress": null,
+   "detail": "whole-module build: not measured (no whole-module build report: python tools/lbpbuild.py)",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "psp-moddable",
+   "title": "Moddable PSP rebuild",
+   "progress": null,
+   "detail": "shifted build: not measured",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "full-rebuild",
+   "title": "Every module rebuilt",
+   "progress": null,
+   "detail": "whole-module build: not measured (no whole-module build report: python tools/lbpbuild.py)",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "portable-source",
+   "title": "Portable source",
+   "progress": null,
+   "detail": "not measured yet: this project has no host-compile check",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "platform-layer",
+   "title": "Platform layer",
+   "progress": null,
+   "detail": "not measured here: needs the game executable (campaign_root) and Nakagawa Recomp's import audit (nakagawa_root)",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "windows-hybrid",
+   "title": "Plays on Windows, hybrid",
+   "progress": 0.0,
+   "detail": "no recorded scenario yet",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "windows",
+   "title": "Plays on Windows from source",
+   "progress": 0.0,
+   "detail": "no recorded scenario yet",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "android-hybrid",
+   "title": "Plays on Android, hybrid",
+   "progress": 0.0,
+   "detail": "no recorded scenario yet",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "android",
+   "title": "Plays on Android from source",
+   "progress": 0.0,
+   "detail": "no recorded scenario yet",
+   "reached": null,
+   "regressed": false
+  },
+  {
+   "id": "strict",
+   "title": "Strict 100%",
+   "progress": 0.0,
+   "detail": "every gate of docs/COMPLETION.md; no source is reviewed yet (gate 7)",
+   "reached": null,
+   "regressed": false
+  }
+ ]
+}

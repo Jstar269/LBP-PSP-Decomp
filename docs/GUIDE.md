@@ -51,6 +51,29 @@ Statuses are hst-decomp's: `EXACT`, `MISMATCH`, `COMPILE_FAILED`, `LINK_FAILED`,
 `UNPLACED_SECTION`, `SECTION_MISMATCH`, `NO_SYMBOL`, `MISPLACED`, `EXACT_EXTRA_FLAGS`, `EXACT_FAILS_GATE`,
 `UNPLACED_FUNCTION`. Only `EXACT` counts.
 
+## Progress, milestones and the second verifier
+
+Four tools follow the design of hst-decomp's `hstobjdiff.py`, tier ladder, milestones and `hstxverify.py`, so both
+projects report progress the same way. The code is this project's own.
+
+| Tool | Purpose |
+| --- | --- |
+| `lbpobjdiff.py` | The objdiff project: `objdiff.json` (gitignored) and minimal ELF32 objects under `build/objdiff/`, one unit per accepted proof (our linked code next to retail) and one `unmatched/<module>` unit per module. `check` compares the project, and objdiff-cli's report when given, with the ledger and `lbpcov.py`. Needs your own copy of the game. |
+| `lbpprogress.py` | The tier ladder (T1 to T4 over the strict scope) from the published figures: `progress.json` (a shields.io endpoint badge, strict match first) and the generated block in `docs/COMPLETION.md`. `--write`, `--check` (fails when a figure disagrees with the ledger rows, the published figures, the badge or the block). |
+| `lbpmilestones.py` | The capability milestones of `data/milestones.json` and their record `docs/milestones.json`: the first date a milestone reached 100% is kept for ever, and a reached milestone measuring below 100% is shown as REGRESSED. `--write`, `--check`. Measures that need the campaign or your own copy are carried from the last record and skipped by `--check` where those are absent. |
+| `lbpxverify.py` | The second, independent verifier. It imports no project tool but `lbpconfig.py` and has its own ELF, header, boundary-list, ledger and figure parsers. `bytes [paths\|--all]` (the matcher's linked bytes against retail), `ledger` (every accepted proof against retail and the tree), `figures [--tree DIR]` (every published figure recounted from the rows, cross-checked with the other tools' files). |
+
+```text
+python tools/lbpprogress.py --check              # ladder, badge and block against the figures and the rows
+python tools/lbpmilestones.py --check            # milestone record against the figures
+python tools/lbpxverify.py figures               # every published figure, recounted independently
+python tools/lbpxverify.py bytes --all           # with your copy of the game: the matcher's bytes, again
+python tools/lbpobjdiff.py && python tools/lbpobjdiff.py check
+```
+
+`tools/lbppublish.py` writes `progress.json` and `docs/milestones.json` for the tree it builds, and `--audit` refuses a
+tree whose badge, ladder block or milestone record disagrees with its figures.
+
 ## Source conventions
 
 **Header (line 1)**, as hst-decomp with the tag `LBPMATCH`:

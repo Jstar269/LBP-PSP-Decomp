@@ -29,6 +29,7 @@ path = [
   "SECURITY.md",
   ".github/**",
   "README.md",
+  "progress.json",
   "THIRD_PARTY.md",
   "REUSE.toml",
   "ORIGINS.json",

@@ -25,7 +25,10 @@ a pure function of those figures (tools/lbpreport.py build_report: the objdiff r
 and percentages only). The report is not tracked in this repository: it is made from the figures in the same run, and
 --audit refuses a tree whose report differs from its figures. The figure blocks of the public README
 (`<!-- lbpfigures:begin NAME -->`, render_blocks) are filled from the same figures, dated by the newest accepted proof
-they count, and --audit refuses a README whose blocks disagree. Nothing else is generated and no file is edited.
+they count, and --audit refuses a README whose blocks disagree. From the same figures, progress.json and the tier
+ladder block of docs/COMPLETION.md (tools/lbpprogress.py) and the milestone record docs/milestones.json
+(tools/lbpmilestones.py, which keeps the reached dates of the record the tree already has) are written, and --audit
+refuses a tree where any of them disagrees. Nothing else is generated and no other file is edited.
 
 Public figures follow hst-decomp's rule (docs/COMPLETION.md): Sony code kept out of the public tree is not counted in
 the public denominator; it stays in the strict scope. Public scope = the game region and the libstdc++ region of
@@ -390,6 +393,11 @@ def build(out: Path, list_all: bool) -> int:
     tus = lbpreport.read_units(out / lbpreport.TU_REL)
     (out / lbpreport.REPORT_REL).write_text(lbpreport.render(lbpreport.build_report(figs, rows, tus)),
                                             encoding="utf-8", newline="\n")
+    import lbpmilestones
+    import lbpprogress
+    lbpprogress.write_tree(out)
+    if (out / lbpmilestones.DEFS_REL).is_file():
+        lbpmilestones.write_tree(out)
     print(f"public tree: {out}")
     print(f"tracked files: {len(tracked)}; copied: {len(keep)} ({copied} bytes); "
           f"excluded: {sum(len(v) for v in excluded.values())}")
@@ -457,6 +465,9 @@ def audit(tree: Path) -> int:
             if (tree / "README.md").is_file():
                 refusals += block_differences((tree / "README.md").read_text(encoding="utf-8"),
                                               lbpreport.load_figures(tree / FIGURES))
+            import lbpmilestones
+            import lbpprogress
+            refusals += lbpprogress.tree_problems(tree) + lbpmilestones.tree_problems(tree)
         except (OSError, ValueError, KeyError) as exc:
             refusals.append(f"{lbpreport.REPORT_REL}: figures and report do not load ({exc!r})")
     for name in ("README.md", "LICENSE", "ORIGINS.json"):
