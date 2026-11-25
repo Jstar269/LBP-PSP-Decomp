@@ -39,6 +39,11 @@ for v in "$ROOT" "$DL" "$WORK" "$SONY_AS" "$PSPDEV_BIN" "$HOST_TOOLS"; do
   case $v in /*) ;; *) die "paths must be absolute (got '$v'); set PSPDEV_BIN" ;; esac
 done
 [ $# -gt 0 ] || die "usage: sh build.sh BUILD... (4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s, or all)"
+[ "$*" = all ] && set -- 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s
+for b; do  # before anything is downloaded: a mistyped name used to fail only after fetch.sh
+  case $b in 4.0.2h|4.0.2x|4.0.4h|4.0.4x|4.0.4c|4.1.0s) ;;
+    *) die "unknown build '$b' (want 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s or all)" ;; esac
+done
 
 # A clean, fixed host environment: the recorded builds were made with exactly these flags and no others.
 unset CPPFLAGS LDFLAGS LIBS CPP CONFIG_SITE GCC_EXEC_PREFIX COMPILER_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH \
@@ -149,6 +154,5 @@ echo "pspdev: $("$PSPDEV_BIN/psp-ld" --version | head -1)"
 sh "$HERE/fetch.sh" "$DL"
 mkdir -p "$WORK"
 
-[ "$*" = all ] && set -- 4.0.2h 4.0.2x 4.0.4h 4.0.4x 4.0.4c 4.1.0s
 for b; do ( build "$b" ); done
 echo "ALL_DONE $*"

@@ -112,6 +112,7 @@ def main() -> int:
         except FileNotFoundError:  # renamed by a concurrent agent while scanning
             continue
         lines = text.splitlines()
+        h = None
         try:
             h = M.parse_header(p)
             if not lines[0].startswith("/* LBPMATCH ") and rel not in flags["header"]:
@@ -142,9 +143,9 @@ def main() -> int:
             flags["selfassign"].append(rel)
         if re.search(r"\bgoto\b", body):
             flags["goto"].append(rel)
-        if kind == "clone":
-            continue  # clones repeat their exemplar's declarations
-        module = M.parse_header(p)["module"]
+        if kind == "clone" or h is None:
+            continue  # clones repeat their exemplar's declarations; a header that does not parse is flagged above
+        module = h["module"]
         for m in DECL.finditer(body):
             ret, name, tail = m.group(1), m.group(2), m.group(3) or ""
             if ret.strip() in ("return", "else", "goto"):
