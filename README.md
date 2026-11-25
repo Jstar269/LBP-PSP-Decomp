@@ -23,8 +23,10 @@ This project rebuilds the code of *LittleBigPlanet* (PSP, UCUS98744, disc versio
 as matched only when its compiled and linked bytes equal the original exactly.
 
 It covers the game's executable (`EBOOT.BIN`): the game's own code and the open-source libraries it links (newlib,
-zlib 1.2.3, GNU libstdc++/libsupc++). The whole executable, rebuilt from these sources plus scaffolding cut from your own
-copy, is byte-identical to the original (SHA-256 equal).
+zlib 1.2.3, GNU libstdc++/libsupc++). A [historical hybrid build](docs/COMPLETION.md#tiers-how-progress-is-reported)
+reproduced the executable byte for byte using matched sources and scaffolding from the maintainer's own copy.
+T2 counts only the bytes produced from source in a byte-identical whole-module rebuild. T2 has not been measured
+for the current published proof set.
 
 The repository holds source only and doesn't build a playable game on its own. Running PSP games natively on a PC is
 the work of [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), which needs your own copy of the game.
@@ -55,8 +57,16 @@ has the figures.
 Contributions are welcome: matched functions, near misses with notes, compiler findings, tool fixes and documentation.
 [CONTRIBUTING.md](CONTRIBUTING.md) says what you need and what a pull request contains, and issues labelled
 [good first issue](https://github.com/Jstar269/lbp-psp-decomp/labels/good%20first%20issue) are small functions to
-start with. Every task here needs your own copy of the game. You can also re-check every published match on your own
-machine:
+start with. Function matching needs your own copy of the game. For documentation and standalone tooling changes, you
+can run these game-free checks from [public CI](.github/workflows/contribution-checks.yml):
+
+```sh
+python3 tools/lbpgate.py --all --wip
+python3 tools/lbpreuse.py check
+python3 -m unittest discover -s tools -p 'test_*.py'
+```
+
+To re-check the published matches on your own machine:
 
 1. Bring your own copy of the game. The tools need its executable, `PSP_GAME/SYSDIR/EBOOT.BIN`, decrypted on your
    own machine into `inputs/` (gitignored) with a tool of your choice, for example Nakagawa Recomp's `nk_decrypt`
@@ -70,8 +80,7 @@ machine:
 **Where does a fix belong?** If the game misbehaves in the recompiled player, the cause is usually general: a missing
 or wrong system-call behaviour, an instruction form, a display-list command or a build step. That work belongs in
 [Nakagawa Recomp](https://github.com/Jstar269/nakagawa-recomp), where it helps every game and needs no disc to test.
-Work belongs here only when it rebuilds a function's source so that the compiled bytes equal the original, and it
-needs your own copy of the game.
+Function reconstruction, fixes to the tools that verify it, and documentation for it belong here.
 
 The compiler findings are in [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md). Never post bytes, disassembly or decompiler
 output of the game to web tools such as decomp.me, pastebins or public issues.
