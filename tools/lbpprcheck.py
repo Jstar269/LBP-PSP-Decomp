@@ -11,15 +11,20 @@ adds or changes:
   place           a path that is never versioned: build/, try/, keys/, inputs/, campaign/, Ghidra projects and caches, lbp-config.json,
                   the disc-derived files tools/lbppublish.py keeps private (DISC_DERIVED); also a change to the
                   published function boundary list (FUNCTION_LISTS: the maintainers decide boundaries) or the
-                  translation-unit map (UNIT_MAPS, tools/lbptu.py)
+                  translation-unit map (UNIT_MAPS, tools/lbptu.py); and any path the base branch's .gitignore
+                  rules keep out (added by force: maintainer-only notes, other modules' function lists, ...)
   size            a changed file over 1 MiB (sources are a few kilobytes; nothing a contribution needs is that big); the
                   generated objdiff report (docs/objdiff-report.json, one unit per function) has a 32 MiB limit
   report          that report when its units do not add up to its module figures (tools/lbpreport.py unit_problems)
+                  or it is not, byte for byte, the report tools/lbpreport.py makes from the tree's
+                  data/public-figures.json, data/public-functions.txt and data/translation-units.json
   private         an added line with a personal or secret value: a home directory path (C:\\Users\\..., /home/...,
                   /mnt/c/Users/...), a private key block, a GitHub, OpenAI or AWS token
   dump            an added file with more than 16 lines that look like a disassembly listing (an address, an
                   instruction word, a mnemonic): disassembly of the game is never published
-  symbols         a deleted or changed line in symbols/ (the symbol maps are append-only)
+  symbols         a deleted or changed line in symbols/ (the symbol maps are append-only), or a map that no longer
+                  loads: a line that is not `NAME = 0xADDRESS;` or a name bound to two addresses (tools/lbpmatch.py
+                  load_symbols), or an address name (FUN_/DAT_/LAB_/PTR_/jtbl_xxxxxxxx) bound to another address
   header          a source in src/ or wip/ whose first line is not an LBPMATCH header with module, start, end and
                   symbol, or that repeats the header further down; a source in src/ without one of the provenance
                   notes CONTRIBUTING.md lists right after the header (tools/lbplint.py provenance_note: one-line
@@ -38,6 +43,7 @@ import argparse
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -65,30 +71,121 @@ HEADER = re.compile(rf"^/\* {MATCH} (?=.*\bmodule=\S)(?=.*\bstart=0x[0-9a-fA-F]+
                     r"(?=.*\bsymbol=\S).*\*/\s*$")
 
 
+SYMBOL_LINE = re.compile(r"(\S+)\s*=\s*(0x[0-9A-Fa-f]+)\s*;?")
+ADDRESS_NAME = re.compile(r"(?:FUN|DAT|LAB|PTR|jtbl)_([0-9a-fA-F]{8})")
+
+
+def symbol_problems(text: str) -> list[str]:
+    """Why a symbol map would not load in tools/lbpmatch.py load_symbols, or binds an address name to an address other
+    than its own ([] when neither)."""
+    seen: dict[str, int] = {}
+    out = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        m = SYMBOL_LINE.fullmatch(line)
+        if not m:
+            out.append(f"line {n} is not `NAME = 0xADDRESS;`: {line[:60]}")
+            continue
+        name, value = m.group(1), int(m.group(2), 16)
+        named = ADDRESS_NAME.fullmatch(name)
+        if named and int(named.group(1), 16) != value:
+            out.append(f"line {n}: {name} = 0x{value:08x} contradicts the address its name carries")
+        if seen.setdefault(name, value) != value:
+            out.append(f"line {n}: {name} is already bound to 0x{seen[name]:08x}")
+    return out
+
+
 def git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace").stdout
+    # --literal-pathspecs: a path given after `--` names that file only (a name such as `:x` or `[ab].c` is no
+    # pathspec magic or glob that matches another file or none). Decoded here, not by text=True: its universal
+    # newlines would turn a carriage return inside a line into a newline
+    return subprocess.run(["git", "--literal-pathspecs", *args], cwd=repo, check=True,
+                          capture_output=True).stdout.decode("utf-8", "replace")
 
 
-def changed_files(repo: Path, base: str) -> list[tuple[str, str]]:
-    """(status, path) of every file the branch adds or modifies relative to the merge base (deletions are fine)."""
-    out = git(repo, "diff", "--name-status", "--no-renames", "--diff-filter=AM", f"{base}...HEAD")
-    return [tuple(line.split("\t", 1)) for line in out.splitlines() if line.strip()]
+def git_z(repo: Path, *args: str) -> list[str]:
+    """The NUL-separated fields of a `-z` git command. Paths come raw (not C-quoted as git quotes names with non-ASCII
+    bytes, quotes, backslashes or control characters), decoded so that `repo / path` is the file itself."""
+    out = subprocess.run(["git", "--literal-pathspecs", *args], cwd=repo, check=True, capture_output=True).stdout
+    return [f.decode("utf-8", "surrogateescape") for f in out.split(b"\0")][:-1] if out else []
+
+
+def changed_files(repo: Path, base: str, kinds: str = "AMT") -> list[tuple[str, str]]:
+    """(status, path) of every file the branch adds, modifies or changes the type of (a file made a symbolic link or
+    a submodule: T) relative to the merge base; with kinds="D", the files it deletes."""
+    fields = git_z(repo, "diff", "-z", "--name-status", "--no-renames", f"--diff-filter={kinds}", f"{base}...HEAD")
+    return list(zip(fields[0::2], fields[1::2]))
 
 
 def binary_paths(repo: Path, base: str) -> set[str]:
-    out = git(repo, "diff", "--numstat", "--no-renames", "--diff-filter=AM", f"{base}...HEAD")
-    return {line.split("\t", 2)[2] for line in out.splitlines() if line.startswith("-\t-\t")}
+    fields = git_z(repo, "diff", "-z", "--numstat", "--no-renames", "--diff-filter=AMT", f"{base}...HEAD")
+    return {f.split("\t", 2)[2] for f in fields if f.startswith("-\t-\t")}
+
+
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+
+
+def diff_lines(repo: Path, base: str, path: str) -> tuple[list[str], list[str]]:
+    """(added, removed) lines of one file. Read by the counts of each hunk header, so a line whose text starts with
+    `++` or `--` is a line like any other (not a `+++`/`---` file header), and split at newlines only (a carriage
+    return, form feed or U+2028 inside a line does not end it)."""
+    out = git(repo, "diff", "--no-color", "--no-ext-diff", "--no-renames", "-U0", f"{base}...HEAD", "--", path)
+    added: list[str] = []
+    removed: list[str] = []
+    lines = out.split("\n")
+    i = 0
+    while i < len(lines):
+        m = HUNK.match(lines[i])
+        i += 1
+        if not m:
+            continue
+        old, new = int(m.group(1) or 1), int(m.group(2) or 1)
+        while (old or new) and i < len(lines):
+            line = lines[i]
+            i += 1
+            if line.startswith("-") and old:
+                removed.append(line[1:])
+                old -= 1
+            elif line.startswith("+") and new:
+                added.append(line[1:])
+                new -= 1
+            elif not line.startswith("\\"):        # "\ No newline at end of file" is no line of the file
+                break
+    return added, removed
+
+
+def ignored_paths(repo: Path, base: str, paths: list[str]) -> set[str]:
+    """The paths that the base branch's ignore rules (its .gitignore files) keep out: they were added by force. The
+    base's rules, not the branch's, so a pull request cannot drop a rule for the files it adds; checked in an empty
+    repository, so no local or global exclude file of this machine counts."""
+    tree = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", base], cwd=repo, check=True,
+                          capture_output=True).stdout.split(b"\0")
+    rules = [n for n in tree if n == b".gitignore" or n.endswith(b"/.gitignore")]
+    if not rules or not paths:
+        return set()
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["git", "init", "-q", tmp], check=True, capture_output=True)
+        for name in rules:
+            blob = subprocess.run(["git", "cat-file", "blob", f"{base}:{name.decode('utf-8', 'surrogateescape')}"],
+                                  cwd=repo, check=True, capture_output=True).stdout
+            dest = Path(tmp, name.decode("utf-8", "surrogateescape"))
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(blob)
+        (Path(tmp) / ".git" / "info" / "exclude").write_bytes(b"")
+        out = subprocess.run(["git", "-c", f"core.excludesFile={Path(tmp, '.git', 'info', 'exclude')}",
+                              "check-ignore", "--no-index", "-z", "--stdin"], cwd=tmp, capture_output=True,
+                             input="\0".join(paths).encode("utf-8", "surrogateescape")).stdout
+    return {f.decode("utf-8", "surrogateescape") for f in out.split(b"\0") if f}
 
 
 def added_lines(repo: Path, base: str, path: str) -> list[str]:
-    out = git(repo, "diff", "--no-renames", "-U0", f"{base}...HEAD", "--", path)
-    return [l[1:] for l in out.splitlines() if l.startswith("+") and not l.startswith("+++")]
+    return diff_lines(repo, base, path)[0]
 
 
 def removed_lines(repo: Path, base: str, path: str) -> list[str]:
-    out = git(repo, "diff", "--no-renames", "-U0", f"{base}...HEAD", "--", path)
-    return [l[1:] for l in out.splitlines() if l.startswith("-") and not l.startswith("---")]
+    return diff_lines(repo, base, path)[1]
 
 
 def report_problems(data: bytes) -> list[str]:
@@ -102,16 +199,42 @@ def report_problems(data: bytes) -> list[str]:
         return [f"not an objdiff report tools/lbpreport.py writes ({type(exc).__name__})"]
 
 
+def report_differences(repo: Path) -> list[str]:
+    """Why the tree's objdiff report is not the one tools/lbpreport.py makes from the tree's figures, rows and units
+    ([] when it is byte for byte): the report is a pure function of them, so it carries nothing else."""
+    import lbpreport
+    figures = repo / lbpreport.FIGURES_REL
+    if not figures.is_file():
+        return [f"no {lbpreport.FIGURES_REL} to make it from"]
+    try:
+        return lbpreport.differences(lbpreport.load_figures(figures), repo / OBJDIFF_REPORT,
+                                     lbpreport.load_rows(repo / lbpreport.ROWS_REL),
+                                     lbpreport.read_units(repo / lbpreport.TU_REL))
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        return [f"the figures do not make a report ({type(exc).__name__}: {str(exc)[:100]})"]
+
+
 def check(repo: Path, base: str) -> list[str]:
     refusals: list[str] = []
     binaries = binary_paths(repo, base)
-    for status, path in changed_files(repo, base):
+    for _, path in changed_files(repo, base, "D"):
+        # deleting a whole file deletes its lines: append-only and the maintainers' lists hold for that too
+        if path.startswith("symbols/"):
+            refusals.append(f"symbols  {path}: deleted (the symbol maps are append only)")
+        elif path in lbppublish.FUNCTION_LISTS or path in lbppublish.UNIT_MAPS:
+            refusals.append(f"place    {path}: deleted (the maintainers' list)")
+    changed = changed_files(repo, base)
+    ignored = ignored_paths(repo, base, [path for _, path in changed])
+    for status, path in changed:
         file = repo / path
         if Path(path).suffix.lower() in BINARY_SUFFIXES or path in binaries:
             refusals.append(f"binary   {path}: binary files and game data are never added")
             continue
         if any(p.search(path) for p in NEVER) or path in lbppublish.DISC_DERIVED:
             refusals.append(f"place    {path}: this path is never versioned")
+            continue
+        if path in ignored:
+            refusals.append(f"place    {path}: the ignore rules (.gitignore) keep this path out; it was added by force")
             continue
         if path in lbppublish.FUNCTION_LISTS:
             refusals.append(f"place    {path}: the function boundary list is the maintainers' (a list you make "
@@ -126,7 +249,7 @@ def check(repo: Path, base: str) -> list[str]:
             if len(data) > REPORT_MAX_BYTES:
                 refusals.append(f"size     {path}: {len(data):,} bytes (limit {REPORT_MAX_BYTES:,})")
                 continue
-            problems = report_problems(data)
+            problems = report_problems(data) or report_differences(repo)
             if problems:
                 refusals.append(f"report   {path}: {problems[0]}")
         elif len(data) > MAX_BYTES:
@@ -144,9 +267,15 @@ def check(repo: Path, base: str) -> list[str]:
         dump = sum(1 for line in added if DUMP_LINE.match(line))
         if dump > DUMP_LIMIT:
             refusals.append(f"dump     {path}: {dump} added lines look like a disassembly listing")
-        if path.startswith("symbols/") and status == "M" and removed_lines(repo, base, path):
+        if path.startswith("symbols/") and status == "T":
+            refusals.append(f"symbols  {path}: no longer a regular file (append only)")
+        elif path.startswith("symbols/") and status == "M" and removed_lines(repo, base, path):
             refusals.append(f"symbols  {path}: existing lines changed or deleted (append only)")
-        if re.match(r"^(src|wip)/.*\.(c|cpp)$", path):
+        elif path.startswith("symbols/") and path.endswith(".txt"):
+            problems = symbol_problems(data.decode("utf-8", "replace"))
+            if problems:
+                refusals.append(f"symbols  {path}: the map no longer loads: {problems[0]}")
+        if re.match(r"(?s)^(src|wip)/.*\.(c|cpp)$", path):
             text = data.decode("utf-8", "replace")
             lines = text.split("\n")
             if not HEADER.match(lines[0]):
@@ -168,6 +297,7 @@ def main() -> int:
                     help="the checkout to check (default: this one)")
     args = ap.parse_args()
     repo = args.repo.resolve()
+    sys.stdout.reconfigure(errors="backslashreplace")      # a path that is not UTF-8 is still printed
     try:
         git(repo, "rev-parse", "--verify", "--quiet", f"{args.base}^{{commit}}")
     except subprocess.CalledProcessError:
