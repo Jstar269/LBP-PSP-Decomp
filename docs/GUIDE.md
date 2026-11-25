@@ -66,7 +66,8 @@ others are `gcc404xs-O0`...`-O3`, the other GCC 4.x builds of `toolchain/gcc4/` 
 `rodata=`, `data=`, `sdata=`, `bss=`, `sbss=` place the object's sections; `helpers=` places same-file static
 helpers. Which profile LBP's game code needs is recorded in [TOOLCHAIN.md](TOOLCHAIN.md).
 
-**Note (line 2)**, one of hst-decomp's kinds (`lbplint.py` checks them), plus one for this project:
+**Note (line 2)**, one of hst-decomp's kinds except its template kind (`lbplint.py` checks them), plus two for this
+project (cross-project clone and m2c):
 
 | Kind | Starts with |
 | --- | --- |
@@ -74,7 +75,8 @@ helpers. Which profile LBP's game code needs is recorded in [TOOLCHAIN.md](TOOLC
 | generated / corrected | `Mechanical translation of Ghidra pseudocode (lbpgen.py tag X)` / `Ghidra pseudocode (lbpgen.py tag X) corrected by hand: ...` |
 | clone | `Clone of src/... (lbpclone.py tag X)` |
 | cross-project clone | `Clone of hst-decomp src/... (lbpxclone.py tag X)`: an HST exact source with LBP's addresses |
-| library | `Library source: newlib <release> <dir>/<file>.c function <name>, ...` |
+| m2c | `Mechanical translation of the disassembly (m2c <commit>, lbpm2c.py tag X)` |
+| library | `Library source: newlib <release> <dir>/<file>.c function <name>, ...`; zlib sources start with `zlib <release> (zlib.net, ...` |
 
 ## Tools
 

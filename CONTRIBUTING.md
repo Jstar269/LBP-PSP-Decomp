@@ -160,7 +160,7 @@ source that started from a generated candidate names the generator tag.
   `/* Ghidra pseudocode (lbpgen.py tag <tag>) corrected by hand: <what you changed>; exact match verified; names and types await human review. */`
 - The tools write the other kinds themselves: `Mechanical translation of Ghidra pseudocode (lbpgen.py tag X)`,
   `Mechanical translation of the disassembly (m2c <commit>, lbpm2c.py tag X)`,
-  `Clone of src/... (lbpclone.py tag X)` and
+  `Clone of src/... (lbpclone.py tag X)`, `Clone of hst-decomp src/... (lbpxclone.py tag X)` and
   `Library source: newlib <release> <dir>/<file>.c function <name>, ...`; the zlib sources name their release first
   (`zlib 1.2.3 (zlib.net, <archive> md5 <digest>), <file>.c; ...`).
 
