@@ -76,6 +76,43 @@ helpers. Which profile LBP's game code needs is recorded in [TOOLCHAIN.md](TOOLC
 | cross-project clone | `Clone of hst-decomp src/... (lbpxclone.py tag X)`: an HST exact source with LBP's addresses |
 | library | `Library source: newlib <release> <dir>/<file>.c function <name>, ...` |
 
+## Behavioural check of a near miss
+
+A near miss is MISMATCH to `lbpmatch.py` whether it computes the same results as retail or not.
+`python tools/lbpcheck.py wip/<file>.c` tells the two apart: after `lbpmatch.py` has linked the file, it runs the
+retail function and the linked candidate from the same starting states and compares what each computes. It needs the
+campaign directory (`campaign_root`) for the retail module; the candidate side is the file's own build products. The
+tool, its states and its output are the same as hst-decomp's `tools/hstcheck.py`.
+
+- **States.** 200 random states by default (`--states N`, `--seed S`; state i of a seed is the same everywhere, and the
+  same as in hst-decomp): every register, HI/LO, every FPU register and a 64 KiB scratch region and 64 KiB stack hold
+  edge values (0, 1, -1, 0x80000000, 0x7fffffff and other boundaries), pointers into the scratch region and special
+  floats (+-0, +-1, +-inf, NaN, the largest and smallest normal single). The module's load segments are mapped too, so
+  globals read their retail initial values. On the owner's machine, `--captured PATH` adds states captured from a
+  real run: JSON objects `{"format": "psp-check-state.v1", "gpr": {"a0": "0x..."}, "fpr": {"f12": "0x..."}, "hi",
+  "lo", "fcr31", "memory": [{"address": "0x...", "hex": "..."}]}` (registers by name, missing ones are 0; the memory
+  blocks are the only memory besides the module). A capture holds game memory: keep it under `try/` or outside the
+  checkout.
+- **Running.** Each side runs until control leaves its bytes: a return, its first call, import or tail jump, or a
+  syscall. The tool then compares how control left and where to, the registers, and every byte either side wrote, and
+  names the first difference. By default it compares what a caller or callee can see: at a return the return value
+  (`--returns int|int64|float|void`, default `int`), s0-s7, gp, sp, fp, ra and f20-f31; at a call the argument
+  registers a0-a3, t0-t3, f12-f19 and the saved ones. Temporaries, HI/LO and the function's own stack frame are not
+  compared there, because register allocation and frame layout change them without changing behaviour; `--strict`
+  compares all of them.
+- **Verdicts.** `SAME_RESULTS` ("behaves like the original on N states") is a separate tier, never counted as matched:
+  only EXACT counts, and no proof, ledger or progress figure reads it. `DIFFERENT` names the first state and the first
+  differing exit, register or address. `NOT_CHECKED` gives the reason. A state the retail side cannot finish (it
+  leaves the modelled memory, runs out of steps or meets an instruction the interpreter does not model) is not
+  checked and is counted by reason; one the candidate cannot finish where retail did is a difference.
+- **Interpreter.** `tools/lbpinterp.py`, project-authored from the MIPS32 ISA and the Allegrex extensions (no other
+  interpreter's code), refuses by name what it does not model: the VFPU (so inline VFPU asm is `NOT_CHECKED`), COP0
+  and system instructions, division by zero, rounding modes other than nearest, FPU traps. Its FPU is IEEE single with
+  round to nearest, denormals kept and every NaN result 0x7fc00000. `--interp nakagawa` runs both sides in Nakagawa
+  Recomp's reference interpreter instead, as a separate program: build `run_elf` there (`make run_elf`) and set
+  `LBPCHECK_RUN_ELF` to it. That interpreter models RAM at 0x08000000-0x0bffffff, which holds the EBOOT; the unit tests
+  use it to cross-check the two interpreters on synthetic code when it is available.
+
 ## Tools
 
 From hst-decomp (renamed `hst*` -> `lbp*`, module tables read from `data/modules.json` through `lbpproject.py`):
@@ -99,6 +136,7 @@ New here:
 | `lbppublish.py` | The would-be public tree (`--out`): tracked files minus Sony SDK / startup / unattributed sources (`lbporigin.py` classes from `data/origin-regions.json` and notes), disc-derived tables, the symbol map and maintainer files; `--audit` checks a tree (including that its objdiff report agrees with its figures); writes `data/public-figures.json` (bytes and function counts), `data/public-functions.txt` (the public scope's functions behind them) and, from those, `docs/objdiff-report.json`. Never touches a remote. |
 | `lbpreport.py` | The objdiff progress report for bytematch.dev and recomp.fyi: `build_report` (used by `lbppublish.py`), and `--tree <public tree> [--check]` to write or compare a tree's report. One unit per recovered translation unit (`EBOOT.BIN/tu-<index>@<first address>`, from `data/translation-units.json`), then one per published source outside them and one `EBOOT.BIN/not-yet-recovered/FUN_<address>` per remaining function of the public scope: names, addresses, sizes and source paths the tree already publishes, never game bytes. |
 | `lbpqueue.py` | Batches for matching agents (`try/agent-queue/<name>-NN.json`): `--kind families` (one representative per unmatched clone family), `near` (lbpgen candidates within 35% of the words, wip leads), `singles`, `library`; flags `ins_zero_low`/`vfpu`; skips what earlier batches and lanes reserved or attempted. |
+| `lbpcheck.py` | Behavioural check of a near miss: runs the retail function and the candidate `lbpmatch.py` linked from the same random (and, with `--captured`, captured) states in `lbpinterp.py` and reports `SAME_RESULTS` ("behaves like the original on N states", never counted as matched), `DIFFERENT` with the first differing register or address, or `NOT_CHECKED` with the reason. See [Behavioural check of a near miss](#behavioural-check-of-a-near-miss). |
 | `lbplane.py` | Maintainers only (not in the public tree): external agent lanes (`rewrite-harvest <lane>` takes a readability lane's rewrites of existing sources through the matcher and the gate, then refreshes their clones): `make <lane> <batch>` (isolated copy under `ext_root`, own build/), `harvest <lane>` (gate, main-tree re-verification, install EXACT only, re-proof with the committed symbols, then the promotion gate; wip/notes), `status`. Lane agents follow `docs/LANE-BRIEF.md`; their findings arrive in `docs/LANE-NOTES.md`. |
 | `lbpreadable.py` | Readability score of the publishable sources (Ghidra-style names, `undefined` types, offset casts, the pasted typedef block); `lbpqueue.py --kind readability` ranks by it times (1 + clones). Rules for a pass: `docs/READABILITY-BRIEF.md`. |
 | `lbpreuse.py` | Licensing: `check` (every tracked file covered by `REUSE.toml`, every licence text present) and `generate --write` (the newlib, zlib and libstdc++ annotation blocks and `third_party/newlib/README.md`). |
