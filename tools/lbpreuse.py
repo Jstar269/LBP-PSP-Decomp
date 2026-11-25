@@ -72,7 +72,8 @@ RED_HAT_DEFAULT = {   # the default copyright of COPYING.NEWLIB in each release
 ID_ORDER = ["LicenseRef-Newlib-UCB-BSD-4-Clause", "LicenseRef-Newlib-UCB-BSD-3-Clause",
             "LicenseRef-Newlib-UCB-Advertising-Notice", "LicenseRef-Newlib-Gay-AT-T", "LicenseRef-Newlib-Sun-fdlibm",
             "LicenseRef-Newlib-Red-Hat", "LicenseRef-Newlib-OAR", "LicenseRef-Newlib-Birgmeier"]
-GPL = "GPL-3.0-or-later"
+# The licence of the project's own part of a near miss in wip/ (the generic src/**, wip/** annotation of REUSE.toml).
+PROJECT_LICENCE = "CC0-1.0"
 
 LIB_NOTE = re.compile(r"Library source: newlib (?P<ver>\d+\.\d+\.\d+) (?P<dir>\w+)/(?P<file>\w+)\.c function (?P<fn>\w+)")
 ADAPTED_NOTE = re.compile(r"Library source: newlib (?P<dir>libm) (?P<file>\w+)\.c function (?P<fn>\w+)")
@@ -85,11 +86,16 @@ BEGIN_LIBS, END_LIBS = "# BEGIN generated library annotations", "# END generated
 # The other open-source libraries LittleBigPlanet links, by origin class (tools/lbporigin.py): licence expression and
 # copyright statements of the reconstructed sources. zlib sources keep zlib's notice (the zlib licence requires it).
 # libstdc++/libsupc++ of GCC 4.0 is GPL-2.0-or-later with the libstdc++ runtime exception; the reconstructions are
-# distributed under GPL-3.0-or-later, which that licence permits (THIRD_PARTY.md).
+# distributed under GPL-3.0-or-later, which that licence permits (THIRD_PARTY.md). They derive from GPL code, so the
+# change of the project's own work to CC0-1.0 (2026-11-23) does not apply to them.
 LIBRARY_CLASSES = {
     "zlib": ("Zlib", ["Copyright (C) 1995-2005 Jean-loup Gailly and Mark Adler"]),
     "libstdc++": ("GPL-3.0-or-later", ["Copyright (C) 1997-2005 Free Software Foundation, Inc.", PROJECT_COPYRIGHT]),
 }
+# Origin classes of GPL-derived sources that have no entry in LIBRARY_CLASSES yet. No source has such a class today;
+# when one appears it needs its library's terms there first, because the generic src/** annotation is CC0-1.0 and
+# must not cover GPL-derived code. `check` refuses such a source.
+UNMAPPED_GPL_CLASSES = ("libgcc",)
 BEGIN_MD, END_MD = "<!-- BEGIN generated source table -->", "<!-- END generated source table -->"
 README = ROOT / "third_party" / "newlib" / "README.md"
 REUSE_TOML = ROOT / "REUSE.toml"
@@ -169,7 +175,7 @@ class Entry:
 
     @property
     def expression(self) -> str:
-        return " AND ".join(self.ids + ([] if self.in_src else [GPL]))
+        return " AND ".join(self.ids + ([] if self.in_src else [PROJECT_LICENCE]))
 
     @property
     def statements(self) -> list[str]:
@@ -228,6 +234,11 @@ def library_paths() -> dict[str, list[str]]:
         if c in LIBRARY_CLASSES:
             out[c].append(p)
     return out
+
+
+def unmapped_gpl_sources(classes: dict[str, str]) -> list[str]:
+    """The sources of a GPL-derived origin class that LIBRARY_CLASSES does not map to its library's terms."""
+    return sorted(p for p, c in classes.items() if c in UNMAPPED_GPL_CLASSES and c not in LIBRARY_CLASSES)
 
 
 def render_libs(paths: dict[str, list[str]]) -> str:
@@ -337,6 +348,9 @@ def check_command() -> int:
         for path in paths:
             if path in effective and annotations[effective[path]]["SPDX-License-Identifier"] != LIBRARY_CLASSES[cls][0]:
                 problems.append(f"{path} is {cls} but its effective annotation is not {LIBRARY_CLASSES[cls][0]}")
+    for path in unmapped_gpl_sources(tracked_classes()):
+        problems.append(f"{path} is GPL-derived (a class of UNMAPPED_GPL_CLASSES) but LIBRARY_CLASSES gives it no "
+                        "terms, so the CC0-1.0 src/** annotation would cover it")
     # the newlib block must be current and cover exactly the sources lbporigin calls newlib
     entries = newlib_entries()
     toml_text = REUSE_TOML.read_text(encoding="utf-8")

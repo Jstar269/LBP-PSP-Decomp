@@ -3,9 +3,12 @@
 Contributions are welcome: matched functions, near misses with notes, compiler findings, tool fixes and documentation.
 This guide covers what you need, how a function is matched and checked, and what a pull request must contain. The
 method is hst-decomp's with the tool names changed; LBP-specific facts are in [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)
-(compiler profiles) and `data/modules.json` (modules). Contributions are licensed GPL-3.0-or-later like the project's
-own code (README, "License"). By opening a pull request you confirm that you wrote the change (or name where it came
-from) and that you may submit it under that licence.
+(compiler profiles) and `data/modules.json` (modules). Contributions are licensed CC0-1.0 (a public-domain
+dedication) like the project's own work (README, "License"), except in the paths that derive from GPL code: a change
+to a GNU libstdc++/libsupc++ reconstruction (the sources `ORIGINS.json` classes `libstdc++`) or to `toolchain/gcc4/`
+is licensed GPL-3.0-or-later. By opening a pull request you confirm that you wrote the change (or name where it came
+from) and that you may submit it under those terms. Code derived from another project keeps that project's terms and
+cannot be dedicated under CC0.
 
 Read [AGENTS.md](AGENTS.md) too: its rules (game data never enters the repository; only EXACT counts) apply to every
 change, by a person or an agent.
@@ -85,8 +88,9 @@ These hold for every file, commit, pull request, issue and comment, here and any
 2. **Read the code.** `python tools/lbpdis.py 0xADDR` prints the retail disassembly of any reviewed function, so look at
    the callees and callers too: they tell you types, argument counts and what a call returns. The Ghidra pseudocode
    is advisory and often wrong in detail (see the compiler notes below).
-3. **Write the function.** Start from the generated candidate, or write it by hand. Prefer natural code (structs with
-   fields, member functions, loops with `break`) over the decompiler's pointer arithmetic.
+3. **Write the function.** Start from the generated candidate, or write it by hand. Write natural code (member
+   functions, loops with `break`) and reach every field through a typed struct or class member: a new match that
+   keeps the decompiler's fixed-offset pointer arithmetic is not accepted ("Source quality" below).
 4. **Iterate.** `python tools/lbpmatch.py <file>` compiles, links at the retail address and compares;
    `python tools/lbpdiff.py <file>` then prints your disassembly next to retail's, with `**` marking differing words.
    Always pass explicit file names. `--flags` and a header `extra=` are for experiments and never count as a match.
@@ -173,11 +177,20 @@ instructions inside an asm template remain forbidden. hst-decomp follows the sam
 
 The owner reviews every source at the end, so aim for the code the developers wrote.
 
-- Among exact variants, keep the most natural one: real control flow (loops, early returns, `switch`), structs and
-  member access instead of `*(int *)(p + 0x14)` when the layout is clear, `bool` and enums where obvious.
-- Avoid matching hacks: duplicated conditions, dummy locals or parameters that only steer register allocation,
-  `volatile`, self-assignments, gratuitous casts or `goto`. When one of them is the **only** exact form you found,
-  keep it, but name it in the note line (`matching idiom: <what>`); `lbplint.py` counts those.
+- Among exact variants, keep the most natural one: real control flow (loops, early returns, `switch`), `bool` and
+  enums where obvious.
+- **Typed structs are required for new work.** Reach a field through a struct or class member, never through
+  `*(int *)(p + 0x14)`: a new match that uses a fixed-offset cast is not accepted. Name a field by what it holds
+  when the code shows it, otherwise by its offset (`unk_14`). Sources accepted before 2026-11-23 with such casts stay
+  in the byte-match figure but are not clean; a standing lane retypes them.
+- **One home per type.** A type that several sources use lives in one header, `include/lbp/<topic>.h`. Edit the
+  header that owns a type; never declare the type again in a source or in a second header. A cleanup pass merges the
+  duplicates that exist.
+- Steering tricks (a duplicated condition, a dummy local or parameter that only steers register allocation,
+  `volatile`, a self-assignment, a gratuitous cast or `goto`) are allowed only when one is the **only** exact form
+  you found, and only with the marker `MATCH-PENDING matching idiom: <what>` in the note line (`lbplint.py` counts
+  those). Such a source counts in the byte-match figure, is left out of the clean figure and is queued for a real
+  fix.
 - Names: use a descriptive name only when the evidence supports it (strings, callers, documented research findings);
   otherwise keep the Ghidra address names. Never invent semantics.
 - Be consistent: one declaration per symbol across the tree (`lbplint.py` reports symbols declared with different
