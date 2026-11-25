@@ -42,7 +42,13 @@ def main() -> int:
 
 
 def show(title: str, ours_bin: Path, target: Path, start: int) -> None:
-    ours = disasm(ours_bin, start) if ours_bin.exists() else []
+    ours = []
+    if ours_bin.exists():
+        body = function_bytes(ours_bin, start, target.stat().st_size)
+        if body != ours_bin.read_bytes():
+            ours_bin = ours_bin.with_name(ours_bin.stem + ".function.bin")
+            ours_bin.write_bytes(body)
+        ours = disasm(ours_bin, start)
     theirs = disasm(target, start)
     print(f"== {title}  (ours | retail)")
     for i in range(max(len(ours), len(theirs))):
@@ -50,6 +56,23 @@ def show(title: str, ours_bin: Path, target: Path, start: int) -> None:
         b = theirs[i] if i < len(theirs) else ""
         mark = "  " if a.split(" ")[0:1] == b.split(" ")[0:1] else "**"
         print(f"{mark} {start + 4 * i:08x}  {a:<44.44} | {b}")
+
+
+def function_bytes(path: Path, start: int, span: int) -> bytes:
+    """Our bytes of the function at `start`, as lbpmatch.py compares them. For a source without helpers=, text.bin is
+    the whole linked .text, which starts before the function when the object defines other code first (a library file
+    compiled whole): lbpmatch compares from the function's address, for the header span or for the symbol's size when
+    that is longer. Any other file (a helpers= section, or no linked.elf beside it) is returned as it is."""
+    data = path.read_bytes()
+    elf_path = path.parent / "linked.elf"
+    if not elf_path.exists():
+        return data
+    elf = elf_path.read_bytes()
+    text = M.linked_section(elf, ".text")
+    if text is None or text[1] != data or not text[0] <= start < text[0] + len(data):
+        return data
+    size = max((s for n, v, s, i, sh in M.elf_symbols(elf) if n and v == start and sh != 0), default=0)
+    return data[start - text[0]:][:max(span, size)]
 
 
 if __name__ == "__main__":
