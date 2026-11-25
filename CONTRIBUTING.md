@@ -207,6 +207,10 @@ If a function ends within about six differing words but not exact, save your bes
 comments: what differs and what you ruled out. Files
 in `wip/` are not built by `--all` and are not verified; they are leads for the next person.
 
+To see whether a near miss already computes what retail computes, run `python tools/lbpmatch.py <file>` and then
+`python tools/lbpcheck.py <file>`, and put its verdict in the trailing comments. `SAME_RESULTS` ("behaves like the
+original on N states") is a lead, not a match: only EXACT counts (docs/GUIDE.md, "Behavioural check of a near miss").
+
 ## Compiler notes
 
 Read [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md) first: which compiler and flags built each part of LittleBigPlanet, with
