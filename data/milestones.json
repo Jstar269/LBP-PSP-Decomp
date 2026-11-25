@@ -1,0 +1,90 @@
+{
+ "schema": "lbp-decomp.milestones.v1",
+ "description": "The capability milestones of docs/COMPLETION.md, in dependency order, as hst-decomp defines its own. tools/lbpmilestones.py measures each one; a milestone is reached only when its own criterion fully holds, and docs/milestones.json keeps the first date it was reached. A reached milestone that later measures below 100% stays in the record and is flagged regressed (REGRESSED), never hidden. Public figures follow the public tree: Sony code kept out of this repository is not counted in the public milestones. Evidence milestones are reached only by an entry in 'evidence' naming a recorded scenario. Nakagawa Recomp covers what the decompilation cannot yet: its runtime is the platform layer and its recompiled code fills unmatched functions in the hybrid builds; game-derived code never moves into it.",
+ "milestones": [
+  {
+   "id": "inventory",
+   "title": "Every byte classified",
+   "criterion": "every function boundary of every module in scope reviewed and every byte assigned to a reviewed region; no open candidate span",
+   "measure": "inventory"
+  },
+  {
+   "id": "game-code",
+   "title": "Game code matched",
+   "criterion": "every function of EBOOT.BIN in the public scope matches exactly (tier 1)",
+   "measure": "t1",
+   "modules": ["EBOOT.BIN"]
+  },
+  {
+   "id": "all-code",
+   "title": "All code matched",
+   "criterion": "every function of every module in scope matches exactly (tier 1); in the public view, the Sony code kept out of this repository is not counted",
+   "measure": "t1",
+   "modules": "all"
+  },
+  {
+   "id": "psp-rebuild",
+   "title": "PSP rebuild",
+   "criterion": "EBOOT.BIN rebuilt byte for byte from source by the whole-module build (tier 2; Sony's code taken from the owner's own copy)",
+   "measure": "t2",
+   "modules": ["EBOOT.BIN"]
+  },
+  {
+   "id": "psp-moddable",
+   "title": "Moddable PSP rebuild",
+   "criterion": "the same build still loads and runs when relocated (tier 3): the game can be changed and rebuilt",
+   "measure": "t3",
+   "modules": ["EBOOT.BIN"]
+  },
+  {
+   "id": "full-rebuild",
+   "title": "Every module rebuilt",
+   "criterion": "every module in scope rebuilt byte for byte from source; no original binary is needed",
+   "measure": "t2",
+   "modules": "all"
+  },
+  {
+   "id": "portable-source",
+   "title": "Portable source",
+   "criterion": "every source of the game executable compiles with a host compiler for 32- and 64-bit Windows and Android targets, against the project's PSP platform headers",
+   "measure": "portable"
+  },
+  {
+   "id": "platform-layer",
+   "title": "Platform layer",
+   "criterion": "every PSP system function the game imports has a complete host implementation; the platform layer is Nakagawa Recomp's runtime, measured from its reviewed import audit",
+   "measure": "platform"
+  },
+  {
+   "id": "windows-hybrid",
+   "title": "Plays on Windows, hybrid",
+   "criterion": "a native Windows build where every matched function is compiled from this source and Nakagawa Recomp supplies the rest (recompiled code and its runtime) completes the documented scenario",
+   "measure": "evidence"
+  },
+  {
+   "id": "windows",
+   "title": "Plays on Windows from source",
+   "criterion": "a native Windows build from this source completes the documented scenario",
+   "measure": "evidence"
+  },
+  {
+   "id": "android-hybrid",
+   "title": "Plays on Android, hybrid",
+   "criterion": "the same hybrid build on Android completes the documented scenario",
+   "measure": "evidence"
+  },
+  {
+   "id": "android",
+   "title": "Plays on Android from source",
+   "criterion": "a native Android build from this source completes the same documented scenario",
+   "measure": "evidence"
+  },
+  {
+   "id": "strict",
+   "title": "Strict 100%",
+   "criterion": "every gate of docs/COMPLETION.md holds for every byte of every module in scope (tier 4)",
+   "measure": "t4"
+  }
+ ],
+ "evidence": []
+}

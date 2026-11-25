@@ -60,12 +60,30 @@ and the container never count. T3 and T4: not measured (0). The first byte-ident
 (ledger journal 48, 5,095 proofs): T2 = 427,216 B produced from source (425,848 code, 1,368 data), 10.449% of the
 strict scope (4,088,394 bytes, both modules).
 
+The tier ladder of the published figures, over the same strict scope (generated; do not edit by hand):
+
+<!-- lbpprogress:begin tiers -->
+
+| Tier | Bytes | Share of the strict scope (4,088,394 B) |
+|---|---|---|
+| T1: function matches (published sources) | 620,052 B | 15.166% |
+| T2: whole-module build | not measured | 0.000% |
+| T3: shifted build | not measured | 0.000% |
+| T4: strict (reviewed) | 0 B | 0.000% |
+
+Measured from `data/public-figures.json` (the accepted proofs of 2026-11-22) by `tools/lbpprogress.py`; the strict scope is every byte of every module `data/modules.json` lists. T1 counts published sources only, so Sony SDK code matched in the maintainer's tree is not in it. A tier that is not measured counts 0. [`progress.json`](../progress.json) is the strict figure as a badge.
+
+<!-- lbpprogress:end -->
+
 ## Milestones (capabilities on the way)
 
 As hst-decomp: every byte classified; game code matched (T1); all code matched; PSP rebuild of the game executable(s)
 byte for byte; moddable (relocated) rebuild; every module rebuilt; portable source; platform layer (Nakagawa
 Recomp's runtime); plays on Windows/Android hybrid, then from source; strict 100%. Each is reached only when its own
 criterion fully holds, and a later drop is shown as REGRESSED, never hidden.
+
+The criteria are `data/milestones.json`; `tools/lbpmilestones.py` measures them from the published figures and keeps
+the record, `docs/milestones.json`, where the first date a milestone reached 100% is never removed.
 
 Nakagawa Recomp covers what this source cannot yet: its runtime is the platform layer and its recompiled code fills
 unmatched functions in hybrid builds. Game-derived code never moves into Nakagawa Recomp.

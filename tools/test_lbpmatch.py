@@ -248,6 +248,8 @@ class BuildKey(unittest.TestCase):
 
     def test_no_tool_builds_its_own_key(self) -> None:
         for f in sorted(Path(M.__file__).resolve().parent.glob("lbp*.py")):
+            if f.name == "lbpxverify.py":
+                continue    # the second verifier must not import the matcher; test_lbpxverify checks its key equals ours
             text = f.read_text(encoding="utf-8")
             if f.name == "lbpmatch.py":
                 text = text.replace('return f"{p.parent.name}__{p.stem}__{digest}"', "")
