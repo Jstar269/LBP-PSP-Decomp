@@ -31,14 +31,14 @@ import lbpgate
 import lbpmatch as M
 
 # The note kinds the campaign importer accepts (campaign reports/import_hst_sources_v14.py KIND_PATTERNS; keep
-# them identical): a note the importer cannot classify keeps the source out of the ledger.
+# them identical): a note the importer cannot classify keeps the source out of the ledger. hst-decomp's template kind
+# (hsttmpl.py) is left out: this project has no template tool, and CONTRIBUTING.md lists exactly these kinds.
 NOTE_KINDS = (("clone", re.compile(r"Clone of src/\S+ \(lbpclone\.py tag [\w./-]+\)")),
               ("xclone", re.compile(r"Clone of hst-decomp src/\S+ \(lbpxclone\.py tag [\w./-]+\)")),
               ("corrected", re.compile(r"Ghidra pseudocode \(lbpgen\.py tag [^)]+\) corrected by hand")),
               ("generated", re.compile(r"Mechanical translation of Ghidra pseudocode \(lbpgen\.py tag [\w./-]+\)")),
               ("m2c", re.compile(r"Mechanical translation of the disassembly \(m2c [0-9a-f]{7,40}, lbpm2c\.py tag [\w./-]+\)")),
               ("library", re.compile(r"Library source: newlib |^\s*zlib \d+\.\d+\.\d+ \(zlib\.net, ")),
-              ("template", re.compile(r"[^.;]*\(template instance, lbptmpl\.py tag [\w./-]+\)")),
               ("hand", re.compile(r"Hand-written reconstruction\b")))
 # One-line comments that may sit between the header and the note (pointers such as a docs/ reference), as in
 # hst-decomp (hstlint.provenance_note).
