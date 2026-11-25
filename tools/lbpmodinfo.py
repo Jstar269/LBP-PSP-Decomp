@@ -7,7 +7,8 @@ For each module: size and SHA-256, ELF type, entry, program headers (load segmen
 flags) when present, the `.comment` strings (compiler and assembler identification), the SceModuleInfo record (module
 name, version, attributes, gp, entry/stub table bounds), the imported libraries (name, version, function and variable
 counts; with --nids every NID) and the exported libraries. Everything is read locally; nothing is written except the
-optional --json report (keep it under try/ or inputs/: it names retail details).
+optional --json report (keep it under try/ or inputs/: it names retail details). The exit status is 1 when a FILE
+cannot be described (not an ELF, truncated or unreadable).
 
 `--modules-entry NAME:SRC_DIR:KIND:ORIGIN` prints a data/modules.json entry for the first FILE (load segments from its
 program headers; functions_file data/functions-NAME.txt).
@@ -41,11 +42,15 @@ class Elf:
     def __init__(self, data: bytes):
         if data[:4] != b"\x7fELF":
             raise ValueError("not an ELF file (still encrypted or compressed?)")
+        if len(data) < 52:
+            raise ValueError(f"truncated: {len(data)} bytes, shorter than an ELF header")
         if data[4] != 1 or data[5] != 1:
             raise ValueError("not a 32-bit little-endian ELF")
         self.data = data
         (self.type, self.machine, _v, self.entry, self.phoff, self.shoff, self.flags, _eh, self.phentsize, self.phnum,
          self.shentsize, self.shnum, self.shstrndx) = struct.unpack_from("<HHIIIIIHHHHHH", data, 16)
+        if self.phnum and (self.phentsize < 32 or self.phoff + self.phnum * self.phentsize > len(data)):
+            raise ValueError(f"truncated: the program header table ends past the file's {len(data)} bytes")
         self.phdrs = [dict(zip(("type", "offset", "vaddr", "paddr", "filesz", "memsz", "flags", "align"),
                                struct.unpack_from("<8I", data, self.phoff + i * self.phentsize)))
                       for i in range(self.phnum)]
@@ -159,7 +164,10 @@ def describe(path: Path, nids: bool) -> dict:
 
 
 def modules_entry(path: Path, spec: str) -> dict:
-    name, src_dir, kind, origin = spec.split(":", 3)
+    parts = spec.split(":", 3)
+    if len(parts) != 4:
+        raise ValueError(f"--modules-entry wants NAME:SRC_DIR:KIND:ORIGIN, got {spec!r}")
+    name, src_dir, kind, origin = parts
     data = path.read_bytes()
     elf = Elf(data)
     segs = [{"flags": p["flags"], "start": p["vaddr"], "file_offset": p["offset"], "file_end": p["offset"] + p["filesz"],
@@ -177,14 +185,19 @@ def main() -> int:
     ap.add_argument("--modules-entry")
     args = ap.parse_args()
     if args.modules_entry:
-        print(json.dumps(modules_entry(args.files[0], args.modules_entry), indent=2))
+        try:
+            entry = modules_entry(args.files[0], args.modules_entry)
+        except (ValueError, OSError) as e:
+            raise SystemExit(f"{args.files[0]}: {e}")
+        print(json.dumps(entry, indent=2))
         return 0
-    reports = []
+    reports, failed = [], 0
     for path in args.files:
         try:
             rep = describe(path, args.nids)
-        except ValueError as e:
+        except (ValueError, OSError) as e:
             print(f"== {path.name}: {e}")
+            failed += 1
             continue
         reports.append(rep)
         print(f"== {rep['file']}: {rep['size']} B sha256 {rep['sha256']} {rep['elf_type']} entry {rep['entry']} "
@@ -205,7 +218,7 @@ def main() -> int:
                 print(f"   export {row['library']:28} {row['version']} funcs {row['functions']:4} vars {row['variables']}")
     if args.json:
         args.json.write_text(json.dumps(reports, indent=1) + "\n", encoding="utf-8")
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

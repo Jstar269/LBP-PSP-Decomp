@@ -13,12 +13,14 @@ Steps (each skipped when its output already exists; nothing is overwritten):
   4. describe every decrypted module (tools/lbpmodinfo.py) -> inputs/modinfo.json, and check each is a 32-bit
      little-endian MIPS ELF/PRX.
 
-Everything stays under the gitignored inputs/. The decryptor never decrypts firmware (owner rule).
+Everything stays under the gitignored inputs/. The decryptor never decrypts firmware (owner rule). Steps 1 and 2
+need 7-Zip: `7z` on PATH, or 7-Zip's default Windows install.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import struct
 import subprocess
 import sys
@@ -47,7 +49,10 @@ def parse_sfo(b: bytes) -> dict:
 
 
 def seven_zip(*args: str, capture: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run([SEVEN_ZIP, *args], capture_output=capture, check=False)
+    exe = shutil.which("7z") or (SEVEN_ZIP if Path(SEVEN_ZIP).is_file() else None)
+    if exe is None:
+        raise SystemExit(f"7-Zip not found: put 7z on PATH or install it at {SEVEN_ZIP}")
+    return subprocess.run([exe, *args], capture_output=capture, check=False)
 
 
 def main() -> int:
@@ -78,6 +83,8 @@ def main() -> int:
         if len(isos) != 1:
             raise SystemExit(f"expected one .iso in {out}, found {len(isos)}")
         iso = isos[0]
+    if not iso.is_file():
+        raise SystemExit(f"no disc image at {iso}")
     print(f"image: {iso} ({iso.stat().st_size} bytes)")
 
     disc_json = INPUTS / "disc.json"
@@ -94,7 +101,11 @@ def main() -> int:
                 if p.endswith((".BIN", ".PRX", ".PBP", ".ELF")) and "/" in p:
                     files.append(cur)
                 cur = {}
-        disc = {"image": iso.name, "image_size": iso.stat().st_size, "param_sfo": parse_sfo(sfo), "executables": files}
+        try:
+            param_sfo = parse_sfo(sfo)
+        except (ValueError, struct.error) as e:
+            raise SystemExit(f"{iso}: cannot read PSP_GAME/PARAM.SFO ({e}); is it a PSP game disc image?")
+        disc = {"image": iso.name, "image_size": iso.stat().st_size, "param_sfo": param_sfo, "executables": files}
         disc_json.write_text(json.dumps(disc, indent=1) + "\n", encoding="utf-8")
     disc = json.loads(disc_json.read_text(encoding="utf-8"))
     sfo = disc["param_sfo"]
